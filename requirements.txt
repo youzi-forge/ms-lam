@@ -1,0 +1,5 @@
+numpy>=1.24
+nibabel>=5.2
+matplotlib>=3.8
+pandas>=2.1
+Pillow>=10.0
