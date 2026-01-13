@@ -47,6 +47,12 @@ def main() -> int:
     parser.add_argument("--patients", type=str, default="", help="Comma-separated patient ids to render")
     parser.add_argument("--num-patients", type=int, default=2, help="Used when --patients is empty")
     parser.add_argument("--timepoints", choices=["t0", "t1", "both"], default="both", help="Which timepoints to render")
+    parser.add_argument(
+        "--scale",
+        choices=["per-timepoint", "shared"],
+        default="per-timepoint",
+        help="Visualization scaling: per-timepoint improves readability; shared helps spot intensity shifts.",
+    )
     parser.add_argument("--out", type=Path, default=Path("results/figures/phase1_lstai_overlay_examples.png"))
     parser.add_argument("--dpi", type=int, default=200)
     args = parser.parse_args()
@@ -140,19 +146,27 @@ def main() -> int:
         f0[~b] = np.nan
         f1[~b] = np.nan
 
-        vmin, vmax = _robust_vmin_vmax(np.concatenate([f0[b].reshape(-1), f1[b].reshape(-1)]), 1, 99)
+        v0 = f0[b].reshape(-1)
+        v1 = f1[b].reshape(-1)
+        if args.scale == "shared":
+            vmin, vmax = _robust_vmin_vmax(np.concatenate([v0, v1]), 1, 99)
+            vmin0, vmax0 = vmin, vmax
+            vmin1, vmax1 = vmin, vmax
+        else:
+            vmin0, vmax0 = _robust_vmin_vmax(v0, 1, 99)
+            vmin1, vmax1 = _robust_vmin_vmax(v1, 1, 99)
 
         for j, tp in enumerate(tps):
             ax = axes[i, j]
             ax.set_axis_off()
             if tp == "t0":
                 m = (mask0[:, :, z] > 0) if mask0 is not None else np.zeros_like(b, dtype=bool)
-                ax.imshow(f0.T, cmap=gray, vmin=vmin, vmax=vmax, origin="lower", interpolation="nearest")
+                ax.imshow(f0.T, cmap=gray, vmin=vmin0, vmax=vmax0, origin="lower", interpolation="nearest")
                 ax.imshow(np.ma.masked_where(m.T == 0, m.T), cmap="Reds", alpha=0.45, origin="lower")
                 ax.set_title(f"{pid} t0 (z={z})", fontsize=12)
             else:
                 m = (mask1[:, :, z] > 0) if mask1 is not None else np.zeros_like(b, dtype=bool)
-                ax.imshow(f1.T, cmap=gray, vmin=vmin, vmax=vmax, origin="lower", interpolation="nearest")
+                ax.imshow(f1.T, cmap=gray, vmin=vmin1, vmax=vmax1, origin="lower", interpolation="nearest")
                 ax.imshow(np.ma.masked_where(m.T == 0, m.T), cmap="Reds", alpha=0.45, origin="lower")
                 ax.set_title(f"{pid} t1 (z={z})", fontsize=12)
 

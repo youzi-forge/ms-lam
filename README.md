@@ -43,8 +43,19 @@ Runlog:
 
 Example overlays:
 - `python3 scripts/05_phase1_overlay_examples.py --patients patient01,patient02`
+  - Add `--scale shared` if you want to highlight intensity shifts between t0/t1.
 
 Notes:
 - Do **not** pass `--stripped` for `open_ms_data` by default (brainmask exists, but images are not necessarily skull-stripped).
 - LST-AI `--output` is a **directory** (the image help text is misleading in some places).
 - With `--probability_map`, LST-AI writes probmaps into `--temp`; this repo copies them into the canonical filenames above.
+
+### Optional: aggregate QC (all patients, single PDF)
+
+If you want a quick visual scan over the whole cohort (without creating 40 separate PNGs):
+- `python3 scripts/06_phase1_qc_report.py`
+  - Add `--scale shared` if you want to highlight intensity shifts between t0/t1.
+
+Outputs:
+- `results/reports/phase1_lstai_qc_overlays.pdf`
+- `results/tables/phase1_mask_volumes.csv`
