@@ -1,0 +1,102 @@
+{
+  "patient_id": "patient20",
+  "ok": true,
+  "meta": {
+    "generated_at": "2026-01-27 13:43:28",
+    "reference_space": "open_ms_data longitudinal/coregistered FLAIR(t0) grid",
+    "voxel_spacing_xyz": [
+      0.8984371423721313,
+      0.8984375,
+      2.998542547225952
+    ],
+    "voxel_vol_mm3": 2.4203924195488877,
+    "dice_empty_policy": "both_empty=1.0; one_empty=0.0",
+    "new_dilation_radius_mm": 2.0,
+    "min_component_volume_mm3": 10.0,
+    "connectivity": 26,
+    "intensity_norm": {
+      "method": "brainmask_percentile_scaling",
+      "p_lo": 1.0,
+      "p_hi": 99.0,
+      "diff_threshold": 0.2
+    }
+  },
+  "inputs": {
+    "flair_t0": "data/raw/open_ms_data/longitudinal/coregistered/patient20/study1_FLAIR.nii.gz",
+    "flair_t1": "data/raw/open_ms_data/longitudinal/coregistered/patient20/study2_FLAIR.nii.gz",
+    "brainmask": "data/raw/open_ms_data/longitudinal/coregistered/patient20/brainmask.nii.gz",
+    "change_gt": "data/raw/open_ms_data/longitudinal/coregistered/patient20/gt.nii.gz",
+    "lesion_mask_t0": "data/processed/lstai_outputs/patient20/t0/lesion_mask.nii.gz",
+    "lesion_mask_t1": "data/processed/lstai_outputs/patient20/t1/lesion_mask.nii.gz",
+    "lesion_prob_t0": "data/processed/lstai_outputs/patient20/t0/lesion_prob.nii.gz",
+    "lesion_prob_t1": "data/processed/lstai_outputs/patient20/t1/lesion_prob.nii.gz"
+  },
+  "warnings": [],
+  "lesion_volumes_mm3": {
+    "t0": 1507.9044773789572,
+    "t1": 2142.0472913007657,
+    "delta": 634.1428139218085
+  },
+  "change_gt_mm3": {
+    "volume": 416.3074961624087,
+    "voxels": 172
+  },
+  "gt_diagnostics": {
+    "covered_by_t1_lesion_mask_frac": 0.09302325581395349,
+    "outside_brainmask_frac": 0.0,
+    "covered_by_t1_lesion_mask_voxels": 16,
+    "outside_brainmask_voxels": 0
+  },
+  "proxies": {
+    "new_raw": {
+      "voxels": 530,
+      "volume_mm3": 1282.8079823609105,
+      "volume_error_mm3": 866.5004861985018,
+      "abs_volume_error_mm3": 866.5004861985018,
+      "dice_to_gt": 0.045584045584045586
+    },
+    "new_conservative": {
+      "voxels": 344,
+      "volume_mm3": 832.6149923248174,
+      "volume_error_mm3": 416.3074961624087,
+      "abs_volume_error_mm3": 416.3074961624087,
+      "dice_to_gt": 0.04263565891472868
+    },
+    "chg_sym_raw": {
+      "voxels": 798,
+      "volume_mm3": 1931.4731508000125,
+      "volume_error_mm3": 1515.165654637604,
+      "abs_volume_error_mm3": 1515.165654637604,
+      "dice_to_gt": 0.032989690721649485
+    },
+    "chg_sym_cons": {
+      "voxels": 1983,
+      "volume_mm3": 4799.638167965444,
+      "volume_error_mm3": 4383.330671803035,
+      "abs_volume_error_mm3": 4383.330671803035,
+      "dice_to_gt": 0.012064965197215777
+    }
+  },
+  "intensity_change": {
+    "t0": {
+      "median": 777.1110229492188,
+      "p_lo": 1.0,
+      "p_hi": 99.0,
+      "v_lo": 103.76051330566406,
+      "v_hi": 1013.9743041992188
+    },
+    "t1": {
+      "median": 73.87815856933594,
+      "p_lo": 1.0,
+      "p_hi": 99.0,
+      "v_lo": 10.014616966247559,
+      "v_hi": 95.95333862304688
+    },
+    "diff": {
+      "mean": 0.05686202645301819,
+      "p95": 0.14779937267303467,
+      "frac_gt": 0.015202696452950817,
+      "frac_threshold": 0.2
+    }
+  }
+}
