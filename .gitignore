@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+# Data (not tracked)
+data/raw/
+data/processed/
+
+# Results: keep small evidence artifacts, ignore heavy runs/caches
+results/runs/
+results/cache/
