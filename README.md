@@ -71,3 +71,26 @@ Outputs:
 - `results/figures/phase2_examples.png`
 - `results/figures/phase2_worst_case.png`
 - `results/figures/phase2_deltaV_hist.png`
+
+## Phase 3: Robustness sensitivity under shift_v1 (scanner/protocol simulation)
+
+This phase applies deterministic input shifts (default: `gamma,noise,resolution`) and measures how Phase 2 metrics
+change under distributional shift.
+
+Smoke test (recommended):
+- `python3 scripts/08_run_robustness_suite.py --patients patient01,patient02 --mode t1_only --levels 0,1`
+
+Full run (all ok patients):
+- `python3 scripts/08_run_robustness_suite.py --mode t1_only`
+
+Notes:
+- Default mode is `t1_only` (shift follow-up only). Use `--mode both` as a control.
+- Enable blur shift explicitly: `--shifts gamma,noise,resolution,blur`.
+- Shifted inputs are cached under `data/processed/shift_v1/` and shifted LST-AI outputs under `data/processed/lstai_outputs_shift_v1/`.
+
+Outputs:
+- `results/tables/phase3_robustness.csv` (+ `phase3_robustness_summary.csv`)
+- `results/tables/phase3_runlog.csv`
+- `results/figures/phase3_robustness_curve_deltaV.png`
+- `results/figures/phase3_robustness_curve_dice.png`
+- `results/figures/phase3_sensitive_case.png`
