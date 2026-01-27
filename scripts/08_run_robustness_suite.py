@@ -870,7 +870,8 @@ def main() -> int:
     import pandas as pd
 
     df = pd.read_csv(out_csv)
-    df_ok = df[df["ok"].astype(str) == "True"].copy()
+    df_ok_all = df[df["ok"].astype(str) == "True"].copy()
+    df_ok = df_ok_all[(df_ok_all["mode"].astype(str) == str(args.mode)) & (df_ok_all["shift"].isin(shifts))].copy()
     if df_ok.empty:
         print(f"Wrote {out_csv.relative_to(repo_root)} but no ok rows to summarize.")
         return 0
@@ -892,6 +893,8 @@ def main() -> int:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    levels_present = sorted({int(x) for x in summary["level"].tolist()})
+
     # ΔV sensitivity curves
     fig = plt.figure(figsize=(8, 5), layout="constrained")
     ax = fig.subplots()
@@ -906,7 +909,7 @@ def main() -> int:
     ax.set_title(f"Phase 3: |ΔV_shift - ΔV_base| vs severity  (mode={args.mode})")
     ax.set_xlabel("shift severity level")
     ax.set_ylabel("|ΔΔV| (mm³)")
-    ax.set_xticks(sorted(set(int(x) for x in summary["level"].tolist())))
+    ax.set_xticks(levels_present)
     ax.legend()
     fig.savefig(out_fig / "phase3_robustness_curve_deltaV.png", dpi=200)
     plt.close(fig)
@@ -926,7 +929,7 @@ def main() -> int:
     ax.set_title(f"Phase 3: Dice_sym_cons(shift) - Dice_sym_cons(base)  (mode={args.mode})")
     ax.set_xlabel("shift severity level")
     ax.set_ylabel("ΔDice (to change GT)")
-    ax.set_xticks(sorted(set(int(x) for x in summary["level"].tolist())))
+    ax.set_xticks(levels_present)
     ax.legend()
     fig.savefig(out_fig / "phase3_robustness_curve_dice.png", dpi=200)
     plt.close(fig)
@@ -1001,7 +1004,7 @@ def main() -> int:
             diff_n = np.abs(n1 - n0)
             return f0, f1, m0b, m1b, new_cons, diff_n
 
-        levels_sorted = sorted(set(int(l) for l in levels))
+        levels_sorted = sorted(set(int(l) for l in levels_present))
         # Ensure level0 included for comparison.
         if 0 not in levels_sorted:
             levels_sorted = [0] + levels_sorted
