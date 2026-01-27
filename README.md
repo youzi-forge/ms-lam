@@ -59,3 +59,15 @@ If you want a quick visual scan over the whole cohort (without creating 40 separ
 Outputs:
 - `results/reports/phase1_lstai_qc_overlays.pdf`
 - `results/tables/phase1_mask_volumes.csv`
+
+## Phase 2: Longitudinal metrics + change-GT validation
+
+Run evaluation (writes per-patient JSON + aggregate CSV + summary figures):
+- `python3 scripts/07_eval_longitudinal.py`
+
+Outputs:
+- `results/tables/phase2_longitudinal_metrics.csv`
+- `results/reports/phase2/patientXX.json`
+- `results/figures/phase2_examples.png`
+- `results/figures/phase2_worst_case.png`
+- `results/figures/phase2_deltaV_hist.png`

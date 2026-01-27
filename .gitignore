@@ -15,3 +15,8 @@ data/processed/
 # Results: keep small evidence artifacts, ignore heavy runs/caches
 results/runs/
 results/cache/
+
+# Scratch outputs
+results/figures/_tmp*/
+results/reports/_tmp*/
+results/tables/_tmp*
