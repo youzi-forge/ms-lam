@@ -27,7 +27,7 @@ Segmentation is treated as a **plug-in component**. The current baseline engine 
 - A new SOTA segmentation architecture repo  
 - A clinically approved system (research/education only)
 
-MS-LAM currently supports a complete end-to-end pipeline on one public longitudinal MS dataset (`open_ms_data`). External benchmarks and uncertainty/QC are planned and will be added incrementally.
+MS-LAM currently supports a complete end-to-end pipeline on one public longitudinal MS dataset (`open_ms_data`). External benchmarks are planned and will be added incrementally.
 
 ---
 
@@ -39,17 +39,30 @@ MS-LAM currently supports a complete end-to-end pipeline on one public longitudi
 - Aggregate monitoring table: `results/tables/phase2_longitudinal_metrics.csv`
 - Robustness sensitivity summary: `results/tables/phase3_robustness_summary.csv`
 - Robustness curve: `results/figures/phase3_robustness_curve_deltaV.png`
+- Uncertainty/QC table: `results/tables/phase4_uncertainty_metrics.csv`
+- Uncertainty/QC reports: `results/reports/phase4/patientXX.json`
 
 **Example montage (monitoring + GT validation + intensity-change evidence)**  
 ![Example montage](results/figures/phase2_examples.png)
 
-<!-- After Phase 3 is fully completed AND you commit these figures, you may enable:
-**Robustness sensitivity curve (shift_v1)**
-![Robustness curve](results/figures/phase3_robustness_curve_deltaV.png)
+**Example QC evidence (uncertainty → patient flags)**  
 
-**Sensitive / worst-case qualitative example**
-![Sensitive case](results/figures/phase3_sensitive_case.png)
--->
+| Uncertainty overlay (t1) | Uncertainty vs error |
+|---|---|
+| ![Uncertainty overlay](results/figures/phase4_unc_overlay.png) | ![Uncertainty vs error](results/figures/phase4_unc_vs_error.png) |
+
+How to read:
+- Overlay: red contour = lesion mask; heatmap = primary uncertainty (default: ensemble variance). The figure includes your requested examples plus cohort maxima.
+- Scatter: x = mean lesion uncertainty @ t1; y = `1 - dice_chg_sym_cons` (Phase 2). Orange points are QC-flagged (`needs_review=True`).
+
+What this shows (in this cohort):
+- Uncertainty hotspots often concentrate around predicted lesions/boundaries, which is a plausible region for disagreement-driven QC.
+- QC flags tend to highlight cases with higher uncertainty and/or higher downstream error, while still allowing “high error but low lesion-uncertainty” cases (e.g., driven by brain-wide p95 rather than lesion mean).
+
+Example cases (this run):
+- `patient04`: flagged by high lesion-mean uncertainty at t1 (and also high Phase 2 error), a typical “needs review” case.
+- `patient07`: flagged by high brain-wide p95 uncertainty at t1 even though lesion-mean uncertainty is not extreme (suggesting more global instability/artefacts).
+- `patient01`: not flagged; shown as a non-flagged reference example.
 
 ---
 
@@ -61,7 +74,7 @@ MS-LAM currently supports a complete end-to-end pipeline on one public longitudi
 | Pretrained baseline inference (LST-AI) | ✅ | Docker runner + canonical outputs |
 | Monitoring metrics + change-GT validation | ✅ | per-patient reports + cohort tables |
 | Robustness sensitivity (shift_v1) | ✅ | `t1_only` / representative subset |
-| Uncertainty maps + QC flags | 🚧 | TTA variance + patient-level QC |
+| Uncertainty maps + QC flags | ✅ | uncertainty summaries + cohort-quantile QC reports |
 | Phenotyping / latent codes | 🔜 | feature table → embeddings/clustering |
 | External benchmarks (ISBI 2015, SHIFTS 2022) | 🔜 | dataset adapters + rerun harness |
 | Normative “digital twin”-style monitoring | 💤 | registration-based subtraction (later) |
@@ -234,6 +247,27 @@ Outputs:
 * `results/figures/phase3_robustness_curve_dice.png`
 * `results/figures/phase3_sensitive_case.png`
 
+### 6) Uncertainty maps (voxel → patient) + QC flags
+
+Compute voxel-level uncertainty proxies from saved probability maps, aggregate to patient-level summaries, derive
+cohort-quantile thresholds, and write QC flags + reports:
+
+```bash
+python3 scripts/10_phase4_uncertainty_qc.py
+```
+
+Optional:
+- save voxel maps (can be large): `python3 scripts/10_phase4_uncertainty_qc.py --save-maps`
+- show more examples in the overlay: `--example-patients patient01,patient04,patient07`
+- annotate more points in the scatter: `--scatter-annotate qc` (default) or `all`
+
+Outputs:
+- `results/tables/phase4_uncertainty_metrics.csv`
+- `results/tables/phase4_qc_thresholds.json`
+- `results/reports/phase4/patientXX.json`
+- `results/figures/phase4_unc_overlay.png`
+- `results/figures/phase4_unc_vs_error.png`
+
 ---
 
 ## Reproducibility & audit trail
@@ -245,20 +279,6 @@ Outputs:
 ---
 
 ## Roadmap (planned modules)
-
-### Uncertainty maps (voxel → patient) + QC flags
-
-Goal: uncertainty maps using **TTA variance (primary)** + probability-map proxies (secondary), aggregated to patient-level QC:
-
-* `needs_review`
-* `change_not_confident`
-
-Planned artefacts:
-
-* `results/tables/phase4_uncertainty_metrics.csv`
-* updated patient reports with uncertainty + QC flags
-* `results/figures/phase4_unc_overlay.png`
-* `results/figures/phase4_unc_vs_error.png`
 
 ### Phenotyping / latent codes
 

@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-01-28 12:30:16",
+  "cohort_n": 20,
+  "primary_uncertainty": "ens_var",
+  "qc_quantile": 0.9,
+  "change_quantile": 0.9,
+  "thresholds": {
+    "unc_mean_lesion_t1": {
+      "column": "unc_ens_var_mean_lesion_t1",
+      "value": 0.09566970020532613
+    },
+    "unc_p95_brain_t1": {
+      "column": "unc_ens_var_p95_brain_t1",
+      "value": 1.6174220672837762e-05
+    },
+    "abs_delta_lesion_vol_mm3": {
+      "column": "phase2_delta_lesion_vol_mm3",
+      "value": 12344.992314033378
+    }
+  }
+}
