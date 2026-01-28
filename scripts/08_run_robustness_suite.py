@@ -934,6 +934,68 @@ def main() -> int:
     fig.savefig(out_fig / "phase3_robustness_curve_dice.png", dpi=200)
     plt.close(fig)
 
+    # Robust summaries (median + IQR): less sensitive to outliers than mean±std.
+    def _q(p: float):
+        def f(x):
+            return x.quantile(p)
+
+        f.__name__ = f"q{int(round(100 * p))}"
+        return f
+
+    gb_rob = df_ok.groupby(["mode", "shift", "level"], as_index=False)
+    summary_rob = gb_rob.agg(
+        abs_deltaV_minus_base_mm3_median=("abs_deltaV_minus_base_mm3", "median"),
+        abs_deltaV_minus_base_mm3_q25=("abs_deltaV_minus_base_mm3", _q(0.25)),
+        abs_deltaV_minus_base_mm3_q75=("abs_deltaV_minus_base_mm3", _q(0.75)),
+        dice_sym_minus_base_median=("dice_sym_minus_base", "median"),
+        dice_sym_minus_base_q25=("dice_sym_minus_base", _q(0.25)),
+        dice_sym_minus_base_q75=("dice_sym_minus_base", _q(0.75)),
+        n=("patient_id", "count"),
+    )
+
+    # Robust ΔV curve: median with IQR band
+    fig = plt.figure(figsize=(8, 5), layout="constrained")
+    ax = fig.subplots()
+    for shift_name in shifts:
+        sub = summary_rob[(summary_rob["shift"] == shift_name)].sort_values("level")
+        if sub.empty:
+            continue
+        xs = sub["level"].astype(int).to_numpy()
+        y_med = sub["abs_deltaV_minus_base_mm3_median"].to_numpy(dtype=float)
+        y_lo = sub["abs_deltaV_minus_base_mm3_q25"].to_numpy(dtype=float)
+        y_hi = sub["abs_deltaV_minus_base_mm3_q75"].to_numpy(dtype=float)
+        (line,) = ax.plot(xs, y_med, marker="o", linewidth=2, label=shift_name)
+        ax.fill_between(xs, y_lo, y_hi, color=line.get_color(), alpha=0.20, linewidth=0)
+    ax.set_title(f"Phase 3 (robust): |ΔV_shift - ΔV_base| median (IQR)  (mode={args.mode})")
+    ax.set_xlabel("shift severity level")
+    ax.set_ylabel("|ΔΔV| (mm³)")
+    ax.set_xticks(levels_present)
+    ax.legend()
+    fig.savefig(out_fig / "phase3_robustness_curve_deltaV_robust.png", dpi=200)
+    plt.close(fig)
+
+    # Robust Dice curve: median with IQR band
+    fig = plt.figure(figsize=(8, 5), layout="constrained")
+    ax = fig.subplots()
+    for shift_name in shifts:
+        sub = summary_rob[(summary_rob["shift"] == shift_name)].sort_values("level")
+        if sub.empty:
+            continue
+        xs = sub["level"].astype(int).to_numpy()
+        y_med = sub["dice_sym_minus_base_median"].to_numpy(dtype=float)
+        y_lo = sub["dice_sym_minus_base_q25"].to_numpy(dtype=float)
+        y_hi = sub["dice_sym_minus_base_q75"].to_numpy(dtype=float)
+        (line,) = ax.plot(xs, y_med, marker="o", linewidth=2, label=shift_name)
+        ax.fill_between(xs, y_lo, y_hi, color=line.get_color(), alpha=0.20, linewidth=0)
+    ax.axhline(0.0, color="black", linewidth=1)
+    ax.set_title(f"Phase 3 (robust): ΔDice_sym_cons median (IQR)  (mode={args.mode})")
+    ax.set_xlabel("shift severity level")
+    ax.set_ylabel("ΔDice (to change GT)")
+    ax.set_xticks(levels_present)
+    ax.legend()
+    fig.savefig(out_fig / "phase3_robustness_curve_dice_robust.png", dpi=200)
+    plt.close(fig)
+
     # Sensitive-case visualization: pick row with largest |ΔΔV| among shifted levels (>0).
     df_shifted = df_ok[df_ok["level"].astype(int) > 0].copy()
     if not df_shifted.empty:

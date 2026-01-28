@@ -38,7 +38,8 @@ MS-LAM currently supports a complete end-to-end pipeline on one public longitudi
 - Patient-level monitoring reports: `results/reports/phase2/patientXX.json`
 - Aggregate monitoring table: `results/tables/phase2_longitudinal_metrics.csv`
 - Robustness sensitivity summary: `results/tables/phase3_robustness_summary.csv`
-- Robustness curve: `results/figures/phase3_robustness_curve_deltaV.png`
+- Robustness curves (mean±std): `results/figures/phase3_robustness_curve_deltaV.png`, `results/figures/phase3_robustness_curve_dice.png`
+- Robustness curves (median/IQR): `results/figures/phase3_robustness_curve_deltaV_robust.png`, `results/figures/phase3_robustness_curve_dice_robust.png`
 - Uncertainty/QC table: `results/tables/phase4_uncertainty_metrics.csv`
 - Uncertainty/QC reports: `results/reports/phase4/patientXX.json`
 
@@ -63,6 +64,12 @@ Example cases (this run):
 - `patient04`: flagged by high lesion-mean uncertainty at t1 (and also high Phase 2 error), a typical “needs review” case.
 - `patient07`: flagged by high brain-wide p95 uncertainty at t1 even though lesion-mean uncertainty is not extreme (suggesting more global instability/artefacts).
 - `patient01`: not flagged; shown as a non-flagged reference example.
+
+**Robustness sensitivity (typical risk; median/IQR)**  
+![Robustness curve (ΔV, robust)](results/figures/phase3_robustness_curve_deltaV_robust.png)
+
+Caption: x = shift severity; y = `|ΔV_shift − ΔV_base|` (mm³), shown as median with IQR band across the selected cohort.
+For full robustness outputs (including mean±std curves and worst-case visualization), see `docs/phase_notes/phase3.md`.
 
 ---
 
@@ -245,7 +252,12 @@ Outputs:
 * `results/tables/phase3_robustness.csv` + `results/tables/phase3_robustness_summary.csv`
 * `results/figures/phase3_robustness_curve_deltaV.png`
 * `results/figures/phase3_robustness_curve_dice.png`
+* `results/figures/phase3_robustness_curve_deltaV_robust.png`
+* `results/figures/phase3_robustness_curve_dice_robust.png`
 * `results/figures/phase3_sensitive_case.png`
+
+Notes:
+- For interpretation (median/IQR vs mean±std; and why the sensitive-case figure shows exactly one patient), see `docs/phase_notes/phase3.md`.
 
 ### 6) Uncertainty maps (voxel → patient) + QC flags
 
