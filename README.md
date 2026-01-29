@@ -10,7 +10,7 @@ Given paired baseline / follow-up scans, it produces **monitoring signals** (Δ 
 Segmentation is treated as a **plug-in component**. The current baseline engine is **LST-AI** (pretrained; no bespoke training required).
 
 > **Status (Jan 2026): actively developing.**  
-> Core monitoring + validation + robustness are implemented on `open_ms_data` with LST-AI as the baseline engine.  
+> Core monitoring + validation + robustness + uncertainty/QC + exploratory phenotyping are implemented on `open_ms_data` with LST-AI as the baseline engine.  
 > See “Project status” and “Roadmap” below for what is implemented vs planned.
 
 ---
@@ -42,9 +42,9 @@ MS-LAM currently supports a complete end-to-end pipeline on one public longitudi
 - Robustness curves (median/IQR): `results/figures/phase3_robustness_curve_deltaV_robust.png`, `results/figures/phase3_robustness_curve_dice_robust.png`
 - Uncertainty/QC table: `results/tables/phase4_uncertainty_metrics.csv`
 - Uncertainty/QC reports: `results/reports/phase4/patientXX.json`
-- Uncertainty vs shift sensitivity: `results/figures/phase4_unc_vs_shift_sens_deltaV.png`
+- Uncertainty vs shift sensitivity: `results/figures/phase4_unc_vs_shift_sens_deltaV.png`, `results/figures/phase4_unc_vs_shift_sens_dice.png`
 - Feature table (phenotyping): `results/tables/features_v1.csv`
-- Latent space (PCA): `results/figures/phase5_latent_space_pca.png`
+- Phenotyping outputs: `results/tables/phenotype_assignments.csv`, `results/tables/phase5_cluster_profiles.csv`, `results/figures/phase5_latent_space_pca.png`, `results/figures/phase5_coassignment_heatmap.png`
 
 **Example montage (monitoring + GT validation + intensity-change evidence)**  
 ![Example montage](results/figures/phase2_examples.png)
@@ -56,17 +56,16 @@ MS-LAM currently supports a complete end-to-end pipeline on one public longitudi
 | ![Uncertainty overlay](results/figures/phase4_unc_overlay.png) | ![Uncertainty vs error](results/figures/phase4_unc_vs_error.png) |
 
 How to read:
-- Overlay: red contour = lesion mask; heatmap = primary uncertainty (default: ensemble variance). The figure includes your requested examples plus cohort maxima.
+- Overlay: red contour = lesion mask; heatmap = primary uncertainty (default: ensemble variance). The figure includes `--example-patients` plus two automatically-added extremes (highest lesion-mean and highest brain-p95 uncertainty @ t1).
 - Scatter: x = mean lesion uncertainty @ t1; y = `1 - dice_chg_sym_cons` (Phase 2). Orange points are QC-flagged (`needs_review=True`).
 
 What this shows (in this cohort):
 - Uncertainty hotspots often concentrate around predicted lesions/boundaries, which is a plausible region for disagreement-driven QC.
 - QC flags tend to highlight cases with higher uncertainty and/or higher downstream error, while still allowing “high error but low lesion-uncertainty” cases (e.g., driven by brain-wide p95 rather than lesion mean).
 
-Example cases (this run):
-- `patient04`: flagged by high lesion-mean uncertainty at t1 (and also high Phase 2 error), a typical “needs review” case.
-- `patient07`: flagged by high brain-wide p95 uncertainty at t1 even though lesion-mean uncertainty is not extreme (suggesting more global instability/artefacts).
-- `patient01`: not flagged; shown as a non-flagged reference example.
+Note:
+- Per-patient QC triggers are recorded in `results/reports/phase4/patientXX.json`.
+- For run-dependent example-case interpretation, see `docs/phase_notes/phase4.md`.
 
 **Robustness sensitivity (typical risk; median/IQR)**  
 ![Robustness curve (ΔV, robust)](results/figures/phase3_robustness_curve_deltaV_robust.png)
@@ -133,7 +132,7 @@ Prereqs:
 Install Python deps:
 ```bash
 pip3 install -r requirements.txt
-````
+```
 
 Pull LST-AI image:
 
@@ -208,7 +207,7 @@ python3 scripts/06_phase1_qc_report.py
 Notes:
 
 * Do **not** pass `--stripped` for `open_ms_data` by default (brainmask exists, but images are not necessarily skull-stripped).
-* LST-AI `--output` is a **directory**.
+* In the `jqmcginnis/lst-ai:v1.2.0` Docker image, LST-AI `--output` behaves as a **directory** (despite some help text suggesting a file path).
 * With `--probability_map`, LST-AI writes probmaps under `--temp`; this repo copies them into canonical filenames.
 
 ### 4) Generate monitoring metrics + validate against change-GT
@@ -305,6 +304,7 @@ Outputs:
 - `results/tables/features_v1.csv`
 - `results/tables/phenotype_assignments.csv`
 - `results/tables/phase5_cluster_profiles.csv`
+- `results/tables/phase5_k_selection.csv`
 - `results/figures/phase5_latent_space_pca.png`
 - `results/figures/phase5_coassignment_heatmap.png`
 
@@ -321,7 +321,7 @@ Notes:
 
 ---
 
-## Roadmap (planned modules)
+## Roadmap (planned modules & enhancements)
 
 ### Phenotyping / latent codes
 
@@ -331,6 +331,7 @@ Implemented artefacts (see `docs/phase_notes/phase5.md`):
 - `results/tables/features_v1.csv`
 - `results/tables/phenotype_assignments.csv`
 - `results/tables/phase5_cluster_profiles.csv`
+- `results/tables/phase5_k_selection.csv`
 - `results/figures/phase5_latent_space_pca.png`
 - `results/figures/phase5_coassignment_heatmap.png`
 

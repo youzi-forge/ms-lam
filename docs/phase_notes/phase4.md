@@ -123,7 +123,8 @@ Tip: for small cohorts (e.g., the representative Phase 3 subset), annotating all
 
 ## Example cases (this run)
 These brief interpretations refer to the outputs produced by `scripts/10_phase4_uncertainty_qc.py` on `open_ms_data`
-with LST-AI as the baseline engine. Exact flagged patients can change if you rerun with different settings.
+with LST-AI as the baseline engine (defaults: primary=`ens_var`, `qc_quantile=0.9`, `change_quantile=0.9`,
+`example_patients=patient01`). Exact flagged patients can change if you rerun with different settings.
 
 - `patient04`: `needs_review=True` triggered by `unc_mean_lesion_t1_high` (high lesion-mean ensemble variance). In this run it also shows very high Phase 2 error (`1 - dice_chg_sym_cons`), making it a clear QC-positive example.
 - `patient07`: `needs_review=True` triggered by `unc_p95_brain_t1_high` (brain-wide high tail uncertainty), even though lesion-mean uncertainty is not among the highest. This pattern is consistent with more global instability rather than only lesion-boundary ambiguity.
