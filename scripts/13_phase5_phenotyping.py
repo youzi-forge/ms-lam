@@ -234,7 +234,10 @@ def main() -> int:
     scaler = RobustScaler() if args.scaler == "robust" else StandardScaler()
     X_scaled = scaler.fit_transform(X_raw)
 
-    n_components = min(5, X_scaled.shape[1])
+    # PCA n_components must be <= min(n_samples, n_features).
+    n_components = min(5, X_scaled.shape[1], X_scaled.shape[0])
+    if n_components < 2:
+        raise SystemExit("Need at least 2 samples and 2 features for PCA + clustering.")
     pca = PCA(n_components=n_components, random_state=int(args.seed))
     X_pca = pca.fit_transform(X_scaled)
 

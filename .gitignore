@@ -20,3 +20,6 @@ results/cache/
 results/figures/_tmp*/
 results/reports/_tmp*/
 results/tables/_tmp*
+
+# Toy smoke-test outputs
+results/_toy*/
