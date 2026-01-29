@@ -90,6 +90,52 @@ For full robustness outputs (including mean±std curves and worst-case visualiza
 
 ---
 
+## Project structure
+
+### Repo layout
+
+```text
+ms-lam/
+  data/
+    raw/                       # local-only (not versioned)
+      open_ms_data/            # upstream clone (recommended)
+    processed/                 # local-only (not versioned)
+      lstai_outputs/           # LST-AI outputs: patientXX/{t0,t1}/...
+      lstai_outputs_shift_v1/  # LST-AI outputs under shift_v1 (optional)
+      shift_v1/                # shifted inputs for robustness suite (optional)
+      phase4_uncertainty_maps/ # voxel-level uncertainty maps (optional; can be large)
+  results/
+    tables/                    # small CSV/JSON outputs (often commit-friendly)
+    figures/                   # key evidence figures (often commit-friendly)
+    reports/                   # per-patient JSON reports
+  src/mslam/                   # library code (IO, engines, metrics, preprocessing, viz)
+  scripts/                     # runnable entrypoints (01..13)
+  docs/phase_notes/            # method notes + run-dependent interpretation
+```
+
+### Pipeline overview (data → metrics → QC → robustness → features)
+
+```mermaid
+flowchart LR
+  A[open_ms_data<br/>longitudinal/coregistered] --> B[Manifest + sanity checks<br/>scripts/01 + scripts/02]
+  B --> C[LST-AI inference (T1+FLAIR)<br/>scripts/04]
+  C --> D[Monitoring metrics + change-GT validation<br/>scripts/07]
+  D --> D1[Phase 2 outputs<br/>tables + per-patient reports + figures]
+
+  B --> E[Shift suite (shift_v1)<br/>(default: shift t1 only)]
+  E --> F[LST-AI on shifted inputs<br/>scripts/08]
+  F --> G[Robustness sensitivity curves + worst-case<br/>tables + figures]
+
+  C --> H[Uncertainty + QC flags<br/>scripts/10]
+  H --> I[Phase 4 outputs<br/>tables + per-patient QC reports + figures]
+  G --> J[Uncertainty vs shift sensitivity (optional)<br/>scripts/11]
+
+  D --> K[Feature table<br/>scripts/12]
+  I --> K
+  J --> K
+  K --> L[Exploratory phenotyping<br/>(PCA + k-means + stability)<br/>scripts/13]
+```
+
 ## Data & pretrained baseline
 
 ### Dataset (implemented): `open_ms_data` (longitudinal/coregistered)
