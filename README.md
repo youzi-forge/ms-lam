@@ -117,23 +117,23 @@ ms-lam/
 
 ```mermaid
 flowchart LR
-  A[open_ms_data<br/>longitudinal/coregistered] --> B[Manifest + sanity checks<br/>scripts/01 + scripts/02]
-  B --> C[LST-AI inference (T1+FLAIR)<br/>scripts/04]
-  C --> D[Monitoring metrics + change-GT validation<br/>scripts/07]
-  D --> D1[Phase 2 outputs<br/>tables + per-patient reports + figures]
+  A[open_ms_data<br/>longitudinal/coregistered] --> B[Manifest and sanity checks<br/>scripts/01 + scripts/02]
+  B --> C[LST-AI inference<br/>T1 and FLAIR<br/>scripts/04]
+  C --> D[Monitoring metrics and change-GT validation<br/>scripts/07]
+  D --> D1[Phase 2 outputs<br/>tables + reports + figures]
 
-  B --> E[Shift suite (shift_v1)<br/>(default: shift t1 only)]
+  B --> E[Shift suite shift_v1<br/>default: shift t1 only]
   E --> F[LST-AI on shifted inputs<br/>scripts/08]
-  F --> G[Robustness sensitivity curves + worst-case<br/>tables + figures]
+  F --> G[Robustness curves and worst-case<br/>tables + figures]
 
-  C --> H[Uncertainty + QC flags<br/>scripts/10]
+  C --> H[Uncertainty and QC flags<br/>scripts/10]
   H --> I[Phase 4 outputs<br/>tables + per-patient QC reports + figures]
-  G --> J[Uncertainty vs shift sensitivity (optional)<br/>scripts/11]
+  G --> J[Uncertainty vs shift sensitivity<br/>optional: scripts/11]
 
   D --> K[Feature table<br/>scripts/12]
   I --> K
   J --> K
-  K --> L[Exploratory phenotyping<br/>(PCA + k-means + stability)<br/>scripts/13]
+  K --> L[Exploratory phenotyping<br/>PCA, k-means, stability<br/>scripts/13]
 ```
 
 ## Data & pretrained baseline
