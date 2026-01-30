@@ -14,6 +14,15 @@ This matches the practical monitoring scenario where scanner/protocol differs at
 We also support a control mode **`both`** (shift t0 and t1 with the same parameters). In a healthy pipeline,
 same-source shifts should generally perturb longitudinal **Δ** metrics less than shifting only one timepoint.
 
+## Suggested patient subset (representative mini-batch)
+When iterating locally (or when compute is limited), it is reasonable to run Phase 3 on a representative subset
+instead of the full cohort. A simple, reproducible selection rule is:
+- Take patients with **largest** and **smallest** `change_gt_vol_mm3` (large-change vs near-zero regime),
+- Take patients with **highest** and **lowest** baseline `dice_chg_sym_cons` (best-case vs worst-case regime),
+- De-duplicate with the priority: worst-dice → highest-GT → lowest-GT → best-dice, and fill with median-ish cases if needed.
+
+This rule is implemented in `scripts/09_select_phase3_patients.py`.
+
 ## shift_v1 suite (deterministic, levelled)
 
 Each shift is defined as `shift_name × severity_level`:
