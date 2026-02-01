@@ -1,96 +1,347 @@
-# MS-LAM: Longitudinal Brain MRI Monitoring Benchmark (baseline-first, validation-first)
+# MS-LAM — Longitudinal Brain MRI Monitoring Benchmark  
 
-This repo is a reproducible **longitudinal brain MRI monitoring baseline** built on public datasets.
+**MS-LAM** is a reproducible evaluation harness for **longitudinal brain MRI monitoring**.
 
-## Phase 0 Quickstart (data manifest + sanity + example figures)
+Given paired baseline / follow-up scans, it produces **monitoring signals** (Δ lesion volume, conservative change proxies, segmentation-independent intensity-change evidence) and provides a **validation harness** for:
+
+- agreement to an observed **change-region GT** (when available), and  
+- **robustness sensitivity** under simulated scanner / protocol shifts (false-change risk).
+
+Segmentation is treated as a **plug-in component**. The current baseline engine is **LST-AI** (pretrained; no bespoke training required).
+
+> **Status (Jan 2026): actively developing.**  
+> Core monitoring + validation + robustness are implemented on `open_ms_data` with LST-AI as the baseline engine.  
+> See “Project status” and “Roadmap” below for what is implemented vs planned.
+
+---
+
+## What this repo is for (and what it is not)
+
+### ✅ This repo is for
+- Building a **longitudinal monitoring baseline** that is reproducible and auditable
+- Stress-testing longitudinal metrics under **distributional shift** (scanner/protocol-like perturbations)
+- Producing **patient-level reports** and **failure-mode evidence** (worst cases, drift curves)
+- Serving as a scaffold for **uncertainty/QC**, **phenotyping**, and **external benchmarking**
+
+### ❌ This repo is not
+- A new SOTA segmentation architecture repo  
+- A clinically approved system (research/education only)
+
+MS-LAM currently supports a complete end-to-end pipeline on one public longitudinal MS dataset (`open_ms_data`). External benchmarks and uncertainty/QC are planned and will be added incrementally.
+
+---
+
+## Key outputs (at a glance)
+
+- Dataset inventory + sanity: `results/tables/phase0_manifest_checked.csv`
+- Baseline lesion masks: `data/processed/lstai_outputs/patientXX/{t0,t1}/lesion_mask.nii.gz`
+- Patient-level monitoring reports: `results/reports/phase2/patientXX.json`
+- Aggregate monitoring table: `results/tables/phase2_longitudinal_metrics.csv`
+- Robustness sensitivity summary: `results/tables/phase3_robustness_summary.csv`
+- Robustness curve: `results/figures/phase3_robustness_curve_deltaV.png`
+
+**Example montage (monitoring + GT validation + intensity-change evidence)**  
+![Example montage](results/figures/phase2_examples.png)
+
+<!-- After Phase 3 is fully completed AND you commit these figures, you may enable:
+**Robustness sensitivity curve (shift_v1)**
+![Robustness curve](results/figures/phase3_robustness_curve_deltaV.png)
+
+**Sensitive / worst-case qualitative example**
+![Sensitive case](results/figures/phase3_sensitive_case.png)
+-->
+
+---
+
+## Project status
+
+| Module | Status | Notes |
+|---|---:|---|
+| Data inventory + sanity checks | ✅ | `open_ms_data` longitudinal/coregistered |
+| Pretrained baseline inference (LST-AI) | ✅ | Docker runner + canonical outputs |
+| Monitoring metrics + change-GT validation | ✅ | per-patient reports + cohort tables |
+| Robustness sensitivity (shift_v1) | ✅ | `t1_only` / representative subset |
+| Uncertainty maps + QC flags | 🚧 | TTA variance + patient-level QC |
+| Phenotyping / latent codes | 🔜 | feature table → embeddings/clustering |
+| External benchmarks (ISBI 2015, SHIFTS 2022) | 🔜 | dataset adapters + rerun harness |
+| Normative “digital twin”-style monitoring | 💤 | registration-based subtraction (later) |
+
+---
+
+## Data & pretrained baseline
+
+### Dataset (implemented): `open_ms_data` (longitudinal/coregistered)
+This repo starts from the public longitudinal MS dataset **open_ms_data**, specifically:
+
+- 2 timepoints per patient (`study1`, `study2`)
+- multi-contrast MRI (`T1W`, `T2W`, `FLAIR`)
+- `brainmask.nii.gz`
+- `gt.nii.gz` (change-region GT for longitudinal lesion changes)
+
+Upstream repository (data not redistributed here):  
+https://github.com/muschellij2/open_ms_data
+
+> **License / attribution**: open_ms_data is released under CC-BY; please follow the upstream repository’s attribution instructions and cite the references listed there.
+
+### Baseline segmentation engine (implemented): **LST-AI** (T1 + FLAIR)
+We use **LST-AI** as a fixed pretrained MS lesion segmentation engine via Docker:
+
+- CPU/GPU capable CLI
+- exports lesion masks and probability maps (ensemble + sub-models)
+- treated as a “segmentation plug-in” for downstream monitoring/validation
+
+⚠️ **Research-only**: LST-AI is not approved for clinical decision-making.
+
+Primary citation:
+- Wiltgen T, McGinnis J, Schlaeger S, et al. *LST-AI: A Deep Learning Ensemble for Accurate MS Lesion Segmentation.*  
+  **NeuroImage: Clinical** (2024) 42:103611. DOI: `10.1016/j.nicl.2024.103611`
+
+Upstream repository:  
+https://github.com/CompImg/LST-AI
+
+---
+
+## Installation
 
 Prereqs:
 - Python 3
-- Install deps: `pip3 install -r requirements.txt`
+- Docker Desktop (for LST-AI inference)
 
-Run:
-1) Build manifest (relative paths):
-   - `python3 scripts/01_make_manifest.py --data-root data/raw/open_ms_data/longitudinal/coregistered --out results/tables/phase0_manifest.csv`
-2) Sanity checks + checked manifest:
-   - `python3 scripts/02_phase0_sanity.py --manifest results/tables/phase0_manifest.csv --out-report results/tables/phase0_sanity_report.csv --out-manifest results/tables/phase0_manifest_checked.csv`
-3) Make 2–3 example figures:
-   - `python3 scripts/03_phase0_make_figures.py --manifest results/tables/phase0_manifest_checked.csv --out-dir results/figures --num-patients 3`
+Install Python deps:
+```bash
+pip3 install -r requirements.txt
+````
 
-Outputs:
-- `results/tables/phase0_manifest.csv`
-- `results/tables/phase0_sanity_report.csv`
-- `results/figures/phase0_patientXX_zZZ.png`
+Pull LST-AI image:
 
-## Phase 1: Pretrained baseline inference (LST-AI via Docker)
+```bash
+docker pull jqmcginnis/lst-ai:v1.2.0
+```
 
-Prereqs:
-- Docker Desktop running
-- LST-AI image pulled: `docker pull jqmcginnis/lst-ai:v1.2.0`
-- On Apple Silicon, run with `--platform linux/amd64` (slower; recommended for smoke tests only)
+Apple Silicon note: runners use `--platform linux/amd64` for compatibility.
+This can be slower and may require increased Docker memory. For faster runs, consider Linux/Colab for inference and copy outputs back.
 
-### Smoke test (1–2 patients)
+---
 
-Run LST-AI on t0/t1 and export canonical outputs:
-- `python3 scripts/04_run_lstai_batch.py --patients patient01,patient02 --timepoints both`
+## Quickstart (recommended workflow)
+
+### 1) Get data (recommended: clone `open_ms_data`)
+
+```bash
+mkdir -p data/raw
+git clone --depth 1 https://github.com/muschellij2/open_ms_data.git data/raw/open_ms_data
+```
+
+We use: `data/raw/open_ms_data/longitudinal/coregistered/`.
+
+### 2) Build a manifest + run sanity checks
+
+```bash
+python3 scripts/01_make_manifest.py \
+  --data-root data/raw/open_ms_data/longitudinal/coregistered \
+  --out results/tables/phase0_manifest.csv
+
+python3 scripts/02_phase0_sanity.py \
+  --manifest results/tables/phase0_manifest.csv \
+  --out-report results/tables/phase0_sanity_report.csv \
+  --out-manifest results/tables/phase0_manifest_checked.csv
+```
+
+Optional: produce a few example figures:
+
+```bash
+python3 scripts/03_phase0_make_figures.py \
+  --manifest results/tables/phase0_manifest_checked.csv \
+  --out-dir results/figures \
+  --num-patients 3
+```
+
+### 3) Run baseline inference (LST-AI)
+
+Smoke test on 1–2 patients:
+
+```bash
+python3 scripts/04_run_lstai_batch.py --patients patient01,patient02 --timepoints both
+```
 
 Outputs per patient/timepoint:
-- `data/processed/lstai_outputs/patientXX/t0/lesion_mask.nii.gz`
-- `data/processed/lstai_outputs/patientXX/t0/lesion_prob.nii.gz`
-- `data/processed/lstai_outputs/patientXX/t0/lesion_prob_model1.nii.gz` (and 2/3)
 
-Runlog:
-- `results/tables/phase1_lstai_runlog.csv`
+* `data/processed/lstai_outputs/patientXX/t0/lesion_mask.nii.gz`
+* `data/processed/lstai_outputs/patientXX/t0/lesion_prob.nii.gz`
+* `data/processed/lstai_outputs/patientXX/t0/lesion_prob_model1.nii.gz` (and 2/3)
 
 Example overlays:
-- `python3 scripts/05_phase1_overlay_examples.py --patients patient01,patient02`
-  - Add `--scale shared` if you want to highlight intensity shifts between t0/t1.
+
+```bash
+python3 scripts/05_phase1_overlay_examples.py --patients patient01,patient02
+```
+
+Optional cohort scan (single PDF):
+
+```bash
+python3 scripts/06_phase1_qc_report.py
+```
 
 Notes:
-- Do **not** pass `--stripped` for `open_ms_data` by default (brainmask exists, but images are not necessarily skull-stripped).
-- LST-AI `--output` is a **directory** (the image help text is misleading in some places).
-- With `--probability_map`, LST-AI writes probmaps into `--temp`; this repo copies them into the canonical filenames above.
 
-### Optional: aggregate QC (all patients, single PDF)
+* Do **not** pass `--stripped` for `open_ms_data` by default (brainmask exists, but images are not necessarily skull-stripped).
+* LST-AI `--output` is a **directory**.
+* With `--probability_map`, LST-AI writes probmaps under `--temp`; this repo copies them into canonical filenames.
 
-If you want a quick visual scan over the whole cohort (without creating 40 separate PNGs):
-- `python3 scripts/06_phase1_qc_report.py`
-  - Add `--scale shared` if you want to highlight intensity shifts between t0/t1.
+### 4) Generate monitoring metrics + validate against change-GT
+
+```bash
+python3 scripts/07_eval_longitudinal.py
+```
+
+Key outputs:
+
+* `results/tables/phase2_longitudinal_metrics.csv`
+* `results/reports/phase2/patientXX.json`
+* `results/figures/phase2_examples.png`
+* `results/figures/phase2_worst_case.png`
+* `results/figures/phase2_deltaV_hist.png`
+
+Design highlights (v1):
+
+* volumes in **mm³** (spacing-aware; never raw voxel counts)
+* conservative new-lesion proxy (mm dilation + small-component filtering)
+* symmetric change proxy (better aligned to change-region GT semantics)
+* segmentation-independent intensity-change evidence (brainmask-normalized)
+
+### 5) Robustness sensitivity under simulated shift (shift_v1)
+
+Smoke test:
+
+```bash
+python3 scripts/08_run_robustness_suite.py --patients patient01,patient02 --mode t1_only --levels 0,1
+```
+
+Representative mini-batch (rule-based selection from Phase 2 table):
+
+```bash
+python3 scripts/09_select_phase3_patients.py
+python3 scripts/08_run_robustness_suite.py \
+  --patients $(paste -sd, results/tables/phase3_selected_patients.txt) \
+  --mode t1_only \
+  --levels 0,1,2
+```
 
 Outputs:
-- `results/reports/phase1_lstai_qc_overlays.pdf`
-- `results/tables/phase1_mask_volumes.csv`
 
-## Phase 2: Longitudinal metrics + change-GT validation
+* `results/tables/phase3_robustness.csv` + `results/tables/phase3_robustness_summary.csv`
+* `results/figures/phase3_robustness_curve_deltaV.png`
+* `results/figures/phase3_robustness_curve_dice.png`
+* `results/figures/phase3_sensitive_case.png`
 
-Run evaluation (writes per-patient JSON + aggregate CSV + summary figures):
-- `python3 scripts/07_eval_longitudinal.py`
+---
 
-Outputs:
-- `results/tables/phase2_longitudinal_metrics.csv`
-- `results/reports/phase2/patientXX.json`
-- `results/figures/phase2_examples.png`
-- `results/figures/phase2_worst_case.png`
-- `results/figures/phase2_deltaV_hist.png`
+## Reproducibility & audit trail
 
-## Phase 3: Robustness sensitivity under shift_v1 (scanner/protocol simulation)
+* Patient reports embed voxel spacing/volume, proxy parameters, empty-mask policies, and normalization strategy.
+* Runlogs record command args, return codes, runtime, and per-run metadata (e.g., `lstai_run.json`).
+* Sanity checks use tolerant affine/spacing comparisons (`allclose`) to avoid false failures from tiny float diffs.
 
-This phase applies deterministic input shifts (default: `gamma,noise,resolution`) and measures how Phase 2 metrics
-change under distributional shift.
+---
 
-Smoke test (recommended):
-- `python3 scripts/08_run_robustness_suite.py --patients patient01,patient02 --mode t1_only --levels 0,1`
+## Roadmap (planned modules)
 
-Full run (all ok patients):
-- `python3 scripts/08_run_robustness_suite.py --mode t1_only`
+### Uncertainty maps (voxel → patient) + QC flags
 
-Notes:
-- Default mode is `t1_only` (shift follow-up only). Use `--mode both` as a control.
-- Enable blur shift explicitly: `--shifts gamma,noise,resolution,blur`.
-- Shifted inputs are cached under `data/processed/shift_v1/` and shifted LST-AI outputs under `data/processed/lstai_outputs_shift_v1/`.
+Goal: uncertainty maps using **TTA variance (primary)** + probability-map proxies (secondary), aggregated to patient-level QC:
 
-Outputs:
-- `results/tables/phase3_robustness.csv` (+ `phase3_robustness_summary.csv`)
-- `results/tables/phase3_runlog.csv`
-- `results/figures/phase3_robustness_curve_deltaV.png`
-- `results/figures/phase3_robustness_curve_dice.png`
-- `results/figures/phase3_sensitive_case.png`
+* `needs_review`
+* `change_not_confident`
+
+Planned artefacts:
+
+* `results/tables/phase4_uncertainty_metrics.csv`
+* updated patient reports with uncertainty + QC flags
+* `results/figures/phase4_unc_overlay.png`
+* `results/figures/phase4_unc_vs_error.png`
+
+### Phenotyping / latent codes
+
+Goal: export patient-level features (ΔV, proxy dice/errors, robustness sensitivity, uncertainty summaries) and learn low-dim embeddings / clustering.
+
+Planned artefacts:
+
+* `results/tables/features_v1.csv`
+* `results/tables/phenotype_assignments.csv`
+* `results/figures/phase5_latent_space.png`
+
+### External benchmarks (ISBI 2015, SHIFTS 2022)
+
+Goal: add dataset adapters and re-run the same monitoring + validation harness.
+
+* ISBI 2015 (Longitudinal MS Lesion Segmentation Challenge):
+  Carass et al., 2017. DOI: `10.1016/j.neuroimage.2016.12.064`
+  Data portal: [https://iacl.ece.jhu.edu/index.php/MSChallenge/data](https://iacl.ece.jhu.edu/index.php/MSChallenge/data)
+
+* SHIFTS 2022 (MS lesion segmentation; robustness + uncertainty):
+  Zenodo Part 1: DOI `10.5281/zenodo.7051658` (access/DUA constraints)
+  Zenodo Part 2: DOI `10.5281/zenodo.7051692` (CC BY-NC-SA 4.0)
+  Track page: [https://shifts.grand-challenge.org/medical-dataset/](https://shifts.grand-challenge.org/medical-dataset/)
+
+### Normative / “digital-twin style” monitoring
+
+Deferred heavy autoencoder training. Planned as a classical, interpretable extension:
+
+* registration-based subtraction / anomaly maps
+* (optional) deformation/Jacobian proxies for atrophy-like change
+
+---
+
+## Method notes (implementation details)
+
+Detailed notes live under `docs/phase_notes/`.
+
+---
+
+## Non-clinical disclaimer
+
+This repository is for **research and educational purposes only**. It is not a medical device and must not be used for clinical decision-making.
+
+---
+
+## How to cite / attribution
+
+If you use this repo, please cite:
+
+1. LST-AI (NeuroImage: Clinical 2024, DOI `10.1016/j.nicl.2024.103611`)
+2. open_ms_data (and the original datasets it curates; see upstream repo for attribution)
+3. (if used) ISBI 2015 challenge paper (Carass et al., 2017, DOI `10.1016/j.neuroimage.2016.12.064`)
+4. (if used) SHIFTS Zenodo records (DOIs `10.5281/zenodo.7051658`, `10.5281/zenodo.7051692`)
+
+Minimal BibTeX:
+
+```bibtex
+@article{Wiltgen2024LSTAI,
+  title   = {LST-AI: A deep learning ensemble for accurate MS lesion segmentation},
+  journal = {NeuroImage: Clinical},
+  volume  = {42},
+  pages   = {103611},
+  year    = {2024},
+  doi     = {10.1016/j.nicl.2024.103611}
+}
+
+@article{Carass2017LongitudinalMSChallenge,
+  title   = {Longitudinal multiple sclerosis lesion segmentation: Resource and challenge},
+  journal = {NeuroImage},
+  volume  = {148},
+  pages   = {77--102},
+  year    = {2017},
+  doi     = {10.1016/j.neuroimage.2016.12.064}
+}
+
+@dataset{ShiftsMSPart1Zenodo,
+  title   = {Shifts Multiple Sclerosis Lesion Segmentation Dataset Part 1},
+  year    = {2022},
+  doi     = {10.5281/zenodo.7051658}
+}
+
+@dataset{ShiftsMSPart2Zenodo,
+  title   = {Shifts Multiple Sclerosis Lesion Segmentation Dataset Part 2},
+  year    = {2022},
+  doi     = {10.5281/zenodo.7051692}
+}
