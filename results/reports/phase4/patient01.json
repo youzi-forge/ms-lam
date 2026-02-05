@@ -1,0 +1,141 @@
+{
+  "patient_id": "patient01",
+  "ok": true,
+  "meta": {
+    "generated_at": "2026-01-28 12:30:07",
+    "primary_uncertainty": "ens_var",
+    "uncertainty_types": [
+      "ens_var",
+      "prob_entropy"
+    ],
+    "boundary_radius_mm": 1.0,
+    "qc_quantile": 0.9,
+    "change_quantile": 0.9,
+    "thresholds_path": "results/tables/phase4_qc_thresholds.json"
+  },
+  "inputs": {
+    "t0": {
+      "flair": "data/raw/open_ms_data/longitudinal/coregistered/patient01/study1_FLAIR.nii.gz",
+      "lesion_mask": "data/processed/lstai_outputs/patient01/t0/lesion_mask.nii.gz",
+      "lesion_prob": "data/processed/lstai_outputs/patient01/t0/lesion_prob.nii.gz",
+      "lesion_prob_model1": "data/processed/lstai_outputs/patient01/t0/lesion_prob_model1.nii.gz",
+      "lesion_prob_model2": "data/processed/lstai_outputs/patient01/t0/lesion_prob_model2.nii.gz",
+      "lesion_prob_model3": "data/processed/lstai_outputs/patient01/t0/lesion_prob_model3.nii.gz"
+    },
+    "t1": {
+      "flair": "data/raw/open_ms_data/longitudinal/coregistered/patient01/study2_FLAIR.nii.gz",
+      "lesion_mask": "data/processed/lstai_outputs/patient01/t1/lesion_mask.nii.gz",
+      "lesion_prob": "data/processed/lstai_outputs/patient01/t1/lesion_prob.nii.gz",
+      "lesion_prob_model1": "data/processed/lstai_outputs/patient01/t1/lesion_prob_model1.nii.gz",
+      "lesion_prob_model2": "data/processed/lstai_outputs/patient01/t1/lesion_prob_model2.nii.gz",
+      "lesion_prob_model3": "data/processed/lstai_outputs/patient01/t1/lesion_prob_model3.nii.gz"
+    }
+  },
+  "warnings": [],
+  "context_phase2": {
+    "delta_lesion_vol_mm3": 1393.276970423681,
+    "dice_chg_sym_cons": 0.3677510608203677,
+    "abs_vol_err_chg_sym_cons_mm3": 443.24495388339574
+  },
+  "uncertainty": {
+    "maps": {
+      "t0": {},
+      "t1": {}
+    },
+    "summaries": {
+      "t0": {
+        "prob_entropy": {
+          "brain": {
+            "mean": 0.00540547352284193,
+            "p95": 0.0005529766203835607,
+            "n_voxels": 844248
+          },
+          "lesion": {
+            "mean": 0.6368907690048218,
+            "p95": 0.6929609179496765,
+            "n_voxels": 175
+          },
+          "boundary": {
+            "mean": 0.5241948962211609,
+            "p95": 0.690601646900177,
+            "n_voxels": 249
+          }
+        },
+        "ens_var": {
+          "brain": {
+            "mean": 0.0008921982953324914,
+            "p95": 5.011175030489312e-09,
+            "n_voxels": 844248
+          },
+          "lesion": {
+            "mean": 0.1293884515762329,
+            "p95": 0.21931537985801697,
+            "n_voxels": 175
+          },
+          "boundary": {
+            "mean": 0.06962672621011734,
+            "p95": 0.1799783706665039,
+            "n_voxels": 249
+          }
+        }
+      },
+      "t1": {
+        "prob_entropy": {
+          "brain": {
+            "mean": 0.003910020925104618,
+            "p95": 0.0002439863746985793,
+            "n_voxels": 844248
+          },
+          "lesion": {
+            "mean": 0.4492947459220886,
+            "p95": 0.6921273469924927,
+            "n_voxels": 1074
+          },
+          "boundary": {
+            "mean": 0.5478636622428894,
+            "p95": 0.6927947998046875,
+            "n_voxels": 711
+          }
+        },
+        "ens_var": {
+          "brain": {
+            "mean": 0.0005444815033115447,
+            "p95": 8.093855585755705e-10,
+            "n_voxels": 844248
+          },
+          "lesion": {
+            "mean": 0.07530950754880905,
+            "p95": 0.21780449151992798,
+            "n_voxels": 1074
+          },
+          "boundary": {
+            "mean": 0.07027047872543335,
+            "p95": 0.18552924692630768,
+            "n_voxels": 711
+          }
+        }
+      }
+    }
+  },
+  "qc": {
+    "thresholds_used": {
+      "unc_mean_lesion_t1": {
+        "column": "unc_ens_var_mean_lesion_t1",
+        "value": 0.09566970020532613
+      },
+      "unc_p95_brain_t1": {
+        "column": "unc_ens_var_p95_brain_t1",
+        "value": 1.6174220672837762e-05
+      },
+      "abs_delta_lesion_vol_mm3": {
+        "column": "phase2_delta_lesion_vol_mm3",
+        "value": 12344.992314033378
+      }
+    },
+    "flags": {
+      "needs_review": false,
+      "change_not_confident": false
+    },
+    "triggers": []
+  }
+}
