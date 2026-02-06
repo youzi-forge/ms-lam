@@ -48,8 +48,34 @@ The Phase 3 runner produces:
 - `results/tables/phase3_runlog.csv`: LST-AI docker run log for shifted inference
 - `results/figures/phase3_robustness_curve_deltaV.png`: sensitivity curve for |ΔV_shift − ΔV_base|
 - `results/figures/phase3_robustness_curve_dice.png`: sensitivity curve for Dice_sym_cons shift-induced change
+- `results/figures/phase3_robustness_curve_deltaV_robust.png`: median (IQR) sensitivity curve for |ΔV_shift − ΔV_base|
+- `results/figures/phase3_robustness_curve_dice_robust.png`: median (IQR) sensitivity curve for Dice_sym_cons shift-induced change
 - `results/figures/phase3_sensitive_case.png`: a worst-case example across severity levels
 
 ## Key interpretation (what this phase means)
 - Large |ΔΔV| under `t1_only` indicates that follow-up heterogeneity can create **false change** in monitoring signals.
 - Dice drops (vs change-GT) under shift indicate degraded agreement with observed change regions, helping diagnose “unsafe” conditions.
+
+### Mean±std vs median(IQR)
+We save both:
+- **mean±std** curves: emphasize *tail risk* (but can be dominated by outliers on small cohorts),
+- **median(IQR)** curves: emphasize *typical* sensitivity and are more robust to a single extreme case.
+
+## Figures (recommended reading order)
+
+### Typical sensitivity (robust)
+These summarize the *typical* impact of shift on monitoring/validation signals (median with IQR band):
+
+![Phase 3 robust ΔV curve](../../results/figures/phase3_robustness_curve_deltaV_robust.png)
+
+- y-axis is `|ΔV_shift − ΔV_base|` (mm³). If this grows with severity, follow-up heterogeneity can create *false change*.
+
+![Phase 3 robust Dice curve](../../results/figures/phase3_robustness_curve_dice_robust.png)
+
+- y-axis is `Dice_sym_cons(shift) − Dice_sym_cons(base)` (to change-GT). Negative values indicate degraded agreement under shift.
+
+### Tail risk / failure mode (single worst-case)
+This figure intentionally shows **one** patient: the worst case selected by largest `|ΔΔV|` among shifted runs.
+It is meant for diagnosing *how* shift breaks the pipeline, not for representing a typical patient.
+
+![Phase 3 sensitive case](../../results/figures/phase3_sensitive_case.png)
