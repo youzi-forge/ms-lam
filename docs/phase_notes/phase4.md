@@ -73,6 +73,8 @@ the per-patient `warnings`.
 - figures:
   - `results/figures/phase4_unc_overlay.png`
   - `results/figures/phase4_unc_vs_error.png`
+  - `results/figures/phase4_unc_vs_shift_sens_deltaV.png` *(optional; requires Phase 3 outputs)*
+  - `results/figures/phase4_unc_vs_shift_sens_dice.png` *(optional; requires Phase 3 outputs)*
 
 ## Figures (how to interpret)
 
@@ -97,6 +99,27 @@ Minimal (no voxel maps):
 
 Write voxel maps (can be large):
 - `python3 scripts/10_phase4_uncertainty_qc.py --save-maps`
+
+### Optional: relate uncertainty to robustness sensitivity (Phase 3)
+If you have Phase 3 outputs (`results/tables/phase3_robustness.csv`) for a subset or the full cohort, you can merge:
+
+- Phase 4 uncertainty summaries (x-axis), and
+- Phase 3 shift sensitivity (y-axis; e.g. `p95(|ΔV_shift − ΔV_base|)` across shift×level)
+
+and generate scatter plots:
+
+- `python3 scripts/11_phase4_uncertainty_vs_shift_sensitivity.py`
+
+This produces:
+- merged table: `results/tables/phase4_uncertainty_vs_shift_sensitivity.csv`
+- figures:
+  - `results/figures/phase4_unc_vs_shift_sens_deltaV.png`
+  - `results/figures/phase4_unc_vs_shift_sens_dice.png`
+
+Interpretation goal: check whether **high uncertainty** cases also tend to be **more shift-sensitive** (higher false-change risk).
+
+Tip: for small cohorts (e.g., the representative Phase 3 subset), annotating all points can be helpful:
+- `python3 scripts/11_phase4_uncertainty_vs_shift_sensitivity.py --annotate all`
 
 ## Example cases (this run)
 These brief interpretations refer to the outputs produced by `scripts/10_phase4_uncertainty_qc.py` on `open_ms_data`

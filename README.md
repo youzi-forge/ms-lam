@@ -42,6 +42,7 @@ MS-LAM currently supports a complete end-to-end pipeline on one public longitudi
 - Robustness curves (median/IQR): `results/figures/phase3_robustness_curve_deltaV_robust.png`, `results/figures/phase3_robustness_curve_dice_robust.png`
 - Uncertainty/QC table: `results/tables/phase4_uncertainty_metrics.csv`
 - Uncertainty/QC reports: `results/reports/phase4/patientXX.json`
+- Uncertainty vs shift sensitivity: `results/figures/phase4_unc_vs_shift_sens_deltaV.png`
 
 **Example montage (monitoring + GT validation + intensity-change evidence)**  
 ![Example montage](results/figures/phase2_examples.png)
@@ -272,6 +273,7 @@ Optional:
 - save voxel maps (can be large): `python3 scripts/10_phase4_uncertainty_qc.py --save-maps`
 - show more examples in the overlay: `--example-patients patient01,patient04,patient07`
 - annotate more points in the scatter: `--scatter-annotate qc` (default) or `all`
+- relate uncertainty to shift sensitivity (requires Phase 3 outputs): `python3 scripts/11_phase4_uncertainty_vs_shift_sensitivity.py`
 
 Outputs:
 - `results/tables/phase4_uncertainty_metrics.csv`
@@ -279,6 +281,9 @@ Outputs:
 - `results/reports/phase4/patientXX.json`
 - `results/figures/phase4_unc_overlay.png`
 - `results/figures/phase4_unc_vs_error.png`
+- `results/tables/phase4_uncertainty_vs_shift_sensitivity.csv` *(requires Phase 3 outputs)*
+- `results/figures/phase4_unc_vs_shift_sens_deltaV.png` *(requires Phase 3 outputs)*
+- `results/figures/phase4_unc_vs_shift_sens_dice.png` *(requires Phase 3 outputs)*
 
 ---
 
