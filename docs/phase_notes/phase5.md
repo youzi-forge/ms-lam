@@ -1,0 +1,79 @@
+# Phase 5: Exploratory phenotyping / latent codes (feature space organisation)
+
+Phase 5 turns the monitoring + validation outputs (Phases 2–4, optionally Phase 3) into a **patient-level feature table**
+and a simple, reproducible **latent representation**.
+
+This module is intentionally **exploratory**:
+- it is designed for **hypothesis generation** and pipeline extension,
+- not for claiming clinically meaningful “subtypes” (small N and model-derived features can reflect QC/algorithmic variance).
+
+## Inputs
+- Phase 2 metrics: `results/tables/phase2_longitudinal_metrics.csv`
+- Phase 4 uncertainty/QC: `results/tables/phase4_uncertainty_metrics.csv`
+- Optional robustness sensitivity (subset or full cohort):
+  - `results/tables/phase4_uncertainty_vs_shift_sensitivity.csv` (produced by `scripts/11_phase4_uncertainty_vs_shift_sensitivity.py`)
+
+## Feature table (one row per patient)
+
+We export a single table that mixes:
+- **monitoring features** (model-based + segmentation-independent evidence),
+- **uncertainty/QC features**,
+- and (explicitly labeled) **evaluation features** that depend on the change-GT (dataset-specific).
+
+Heavy-tailed, non-negative quantities (e.g., volumes) also get `log1p_...` columns for stable downstream analysis.
+
+Run:
+- `python3 scripts/12_phase5_export_features.py`
+
+Output:
+- `results/tables/features_v1.csv`
+
+## Latent space + clustering (minimal, reproducible)
+
+Default pipeline:
+1) robust scaling
+2) PCA (2D for visualization; up to 5D for clustering)
+3) k-means (k chosen by silhouette over a small k-range, unless fixed)
+4) **stability** via repeated seeds (co-assignment matrix)
+
+Run (Mode A: uses Phase 2 + Phase 4 only; avoids robustness features):
+- `python3 scripts/13_phase5_phenotyping.py --feature-set mode_a`
+
+Outputs:
+- `results/tables/phenotype_assignments.csv`
+- `results/tables/phase5_cluster_profiles.csv`
+- `results/tables/phase5_k_selection.csv`
+- `results/figures/phase5_latent_space_pca.png`
+- `results/figures/phase5_coassignment_heatmap.png`
+
+### Avoiding “QC-outlier-only” clustering
+Depending on your cohort, including global tail-uncertainty (e.g., `unc_ens_var_p95_brain_t1`) can cause
+the latent space + k-means to primarily separate a single QC outlier (useful, but not always “phenotyping”).
+
+Two options:
+- Use the phenotyping-oriented feature set (excludes `unc_ens_var_p95_brain_t1`):  
+  `python3 scripts/13_phase5_phenotyping.py --feature-set mode_a_pheno`
+- Or keep the original features but avoid singleton clusters during automatic k selection:  
+  `python3 scripts/13_phase5_phenotyping.py --min-cluster-size 2`
+
+### Mode B (optional; includes robustness sensitivity)
+If you have Phase 3 sensitivity columns in `features_v1.csv` (e.g. after running Phase 3 on more patients),
+you can switch to:
+- `python3 scripts/13_phase5_phenotyping.py --feature-set mode_b --missing drop`
+
+## Figures (example; Mode A_pheno)
+These figures are meant as **exploratory evidence** of how patients distribute in the feature space and how stable the
+groupings are under different random seeds.
+
+Recommended default visualization uses:
+- color = k-means cluster (exploratory grouping),
+- marker shape = QC flag (`qc_needs_review` from Phase 4).
+
+![Phase 5 latent space (PCA; mode_a_pheno)](../../results/figures/phase5_latent_space_pca_pheno.png)
+
+![Phase 5 stability (co-assignment)](../../results/figures/phase5_coassignment_heatmap_pheno.png)
+
+## Interpretation guidelines
+- Treat clusters as **groupings in a quality-aware feature space**, not clinical phenotypes.
+- Use `phase5_cluster_profiles.csv` to see what drives each cluster (e.g., change magnitude vs uncertainty vs intensity-change).
+- Use `phase5_coassignment_heatmap.png` to judge whether groupings are stable under different random seeds.

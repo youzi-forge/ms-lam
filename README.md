@@ -43,6 +43,8 @@ MS-LAM currently supports a complete end-to-end pipeline on one public longitudi
 - Uncertainty/QC table: `results/tables/phase4_uncertainty_metrics.csv`
 - Uncertainty/QC reports: `results/reports/phase4/patientXX.json`
 - Uncertainty vs shift sensitivity: `results/figures/phase4_unc_vs_shift_sens_deltaV.png`
+- Feature table (phenotyping): `results/tables/features_v1.csv`
+- Latent space (PCA): `results/figures/phase5_latent_space_pca.png`
 
 **Example montage (monitoring + GT validation + intensity-change evidence)**  
 ![Example montage](results/figures/phase2_examples.png)
@@ -83,7 +85,7 @@ For full robustness outputs (including mean±std curves and worst-case visualiza
 | Monitoring metrics + change-GT validation | ✅ | per-patient reports + cohort tables |
 | Robustness sensitivity (shift_v1) | ✅ | `t1_only` / representative subset |
 | Uncertainty maps + QC flags | ✅ | uncertainty summaries + cohort-quantile QC reports |
-| Phenotyping / latent codes | 🔜 | feature table → embeddings/clustering |
+| Phenotyping / latent codes | ✅ | feature table → PCA/k-means + stability |
 | External benchmarks (ISBI 2015, SHIFTS 2022) | 🔜 | dataset adapters + rerun harness |
 | Normative “digital twin”-style monitoring | 💤 | registration-based subtraction (later) |
 
@@ -285,6 +287,30 @@ Outputs:
 - `results/figures/phase4_unc_vs_shift_sens_deltaV.png` *(requires Phase 3 outputs)*
 - `results/figures/phase4_unc_vs_shift_sens_dice.png` *(requires Phase 3 outputs)*
 
+### 7) Exploratory phenotyping (features → latent space)
+
+Export a patient-level feature table (Phase 2 + Phase 4; optionally includes Phase 3 sensitivity if available):
+
+```bash
+python3 scripts/12_phase5_export_features.py
+```
+
+Run a minimal, reproducible phenotyping pipeline (PCA + k-means + stability):
+
+```bash
+python3 scripts/13_phase5_phenotyping.py --feature-set mode_a_pheno
+```
+
+Outputs:
+- `results/tables/features_v1.csv`
+- `results/tables/phenotype_assignments.csv`
+- `results/tables/phase5_cluster_profiles.csv`
+- `results/figures/phase5_latent_space_pca.png`
+- `results/figures/phase5_coassignment_heatmap.png`
+
+Notes:
+- Phase 5 is exploratory; for interpretation and recommended visualizations, see `docs/phase_notes/phase5.md`.
+
 ---
 
 ## Reproducibility & audit trail
@@ -299,13 +325,17 @@ Outputs:
 
 ### Phenotyping / latent codes
 
-Goal: export patient-level features (ΔV, proxy dice/errors, robustness sensitivity, uncertainty summaries) and learn low-dim embeddings / clustering.
+Goal: export patient-level features and learn an exploratory latent representation for grouping / QC-aware analysis.
 
-Planned artefacts:
+Implemented artefacts (see `docs/phase_notes/phase5.md`):
+- `results/tables/features_v1.csv`
+- `results/tables/phenotype_assignments.csv`
+- `results/tables/phase5_cluster_profiles.csv`
+- `results/figures/phase5_latent_space_pca.png`
+- `results/figures/phase5_coassignment_heatmap.png`
 
-* `results/tables/features_v1.csv`
-* `results/tables/phenotype_assignments.csv`
-* `results/figures/phase5_latent_space.png`
+Optional enhancement:
+- If Phase 3 robustness is run on more patients (ideally the full cohort), Phase 5 can switch to `--feature-set mode_b` to include shift-sensitivity features.
 
 ### External benchmarks (ISBI 2015, SHIFTS 2022)
 
