@@ -380,14 +380,6 @@ def main() -> int:
             diff_threshold=float(args.diff_threshold),
         )
 
-        # Normalized diff image for visualization
-        # (recompute norms using returned v_lo/v_hi for reproducibility)
-        denom0 = (t0_stats["v_hi"] - t0_stats["v_lo"]) if (t0_stats["v_hi"] > t0_stats["v_lo"]) else 1.0
-        denom1 = (t1_stats["v_hi"] - t1_stats["v_lo"]) if (t1_stats["v_hi"] > t1_stats["v_lo"]) else 1.0
-        n0 = np.clip((flair0.astype(np.float32, copy=False) - float(t0_stats["v_lo"])) / float(denom0), 0.0, 1.0)
-        n1 = np.clip((flair1.astype(np.float32, copy=False) - float(t1_stats["v_lo"])) / float(denom1), 0.0, 1.0)
-        diff_norm = np.abs(n1 - n0)
-
         report_path = out_reports / f"{pid}.json"
         report = {
             "patient_id": pid,

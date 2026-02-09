@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import math
 import time
 from pathlib import Path
+
+import numpy as np
 
 
 def _read_manifest(path: Path) -> list[dict[str, str]]:
@@ -78,9 +79,7 @@ def _save_nifti_like(ref_path: Path, out_path: Path, data) -> None:
     nib.save(out_img, str(out_path))
 
 
-def _bool(a) -> "np.ndarray":
-    import numpy as np
-
+def _bool(a) -> np.ndarray:
     return (np.asarray(a) > 0)
 
 

@@ -187,6 +187,13 @@ Install Python deps:
 pip3 install -r requirements.txt
 ```
 
+Optional (dev): install pre-commit hooks (runs a minimal `ruff` lint on `git commit`):
+
+```bash
+pip3 install -r requirements-dev.txt
+pre-commit install
+```
+
 Pull LST-AI image:
 
 ```bash

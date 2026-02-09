@@ -102,7 +102,7 @@ def main() -> int:
     print("Selection rule:")
     print(f"- GT magnitude: '{args.gt_col}' (top {args.k_gt_top}, bottom {args.k_gt_bottom})")
     print(f"- Baseline quality: '{args.dice_col}' (top {args.k_dice_top}, bottom {args.k_dice_bottom})")
-    print(f"- Priority: worst dice -> highest GT -> lowest GT -> best dice; de-dup then fill with median-ish if needed")
+    print("- Priority: worst dice -> highest GT -> lowest GT -> best dice; de-dup then fill with median-ish if needed")
     print("")
     print(f"Wrote: {out_path.as_posix()}")
     print("Patients (comma-separated):")
@@ -112,4 +112,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

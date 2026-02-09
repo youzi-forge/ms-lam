@@ -121,7 +121,6 @@ def read_array(path: str | Path) -> tuple[NiftiHeader, np.ndarray]:
     if len(raw) < 348:
         raise ValueError(f"Short NIfTI file: {path}")
 
-    endian = _detect_endian(raw[:348])
     hdr = read_header(path)
 
     dtype = _DTYPE_MAP.get(hdr.datatype)
@@ -143,4 +142,3 @@ def read_array(path: str | Path) -> tuple[NiftiHeader, np.ndarray]:
         if hdr.scl_slope != 0.0:
             arr = arr.astype(np.float32, copy=False) * float(hdr.scl_slope) + float(hdr.scl_inter)
     return hdr, arr
-
