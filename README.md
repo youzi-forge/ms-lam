@@ -115,20 +115,27 @@ ms-lam/
 
 ### Pipeline overview (data → metrics → QC → robustness → features)
 
+This diagram is a **high-level dependency view** (keeps the main dataflow readable; optional visualization-only steps are omitted).
+
 ```mermaid
 flowchart LR
   A[open_ms_data<br/>longitudinal/coregistered] --> B[Manifest and sanity checks<br/>scripts/01 + scripts/02]
   B --> C[LST-AI inference<br/>T1 and FLAIR<br/>scripts/04]
-  C --> D[Monitoring metrics and change-GT validation<br/>scripts/07]
-  D --> D1[Phase 2 outputs<br/>tables + reports + figures]
+  B --> D[Monitoring metrics and change-GT validation<br/>scripts/07]
+  C --> D
 
   B --> E[Shift suite shift_v1<br/>default: shift t1 only]
   E --> F[LST-AI on shifted inputs<br/>scripts/08]
-  F --> G[Robustness curves and worst-case<br/>tables + figures]
+  C --> G[Robustness sensitivity<br/>scripts/08]
+  F --> G
 
-  C --> H[Uncertainty and QC flags<br/>scripts/10]
+  B --> H[Uncertainty and QC flags<br/>scripts/10]
+  C --> H
+  D --> H
   H --> I[Phase 4 outputs<br/>tables + per-patient QC reports + figures]
-  G --> J[Uncertainty vs shift sensitivity<br/>optional: scripts/11]
+
+  I --> J[Uncertainty vs shift sensitivity<br/>optional: scripts/11]
+  G --> J
 
   D --> K[Feature table<br/>scripts/12]
   I --> K
@@ -459,3 +466,11 @@ Minimal BibTeX:
   year    = {2022},
   doi     = {10.5281/zenodo.7051692}
 }
+```
+
+---
+
+## License
+
+Code is released under the MIT License (see `LICENSE`).  
+Data and model weights are governed by their respective upstream licenses/terms (see “Data & pretrained baseline”).
