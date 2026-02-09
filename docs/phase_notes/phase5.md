@@ -36,8 +36,8 @@ Default pipeline:
 3) k-means (k chosen by silhouette over a small k-range, unless fixed)
 4) **stability** via repeated seeds (co-assignment matrix)
 
-Run (Mode A: uses Phase 2 + Phase 4 only; avoids robustness features):
-- `python3 scripts/13_phase5_phenotyping.py --feature-set mode_a`
+Run (recommended default for “phenotyping-style” exploration):
+- `python3 scripts/13_phase5_phenotyping.py --feature-set mode_a_pheno`
 
 Outputs:
 - `results/tables/phenotype_assignments.csv`
@@ -53,6 +53,8 @@ the latent space + k-means to primarily separate a single QC outlier (useful, bu
 Two options:
 - Use the phenotyping-oriented feature set (excludes `unc_ens_var_p95_brain_t1`):  
   `python3 scripts/13_phase5_phenotyping.py --feature-set mode_a_pheno`
+- Or use the QC-oriented feature set (includes `unc_ens_var_p95_brain_t1`):  
+  `python3 scripts/13_phase5_phenotyping.py --feature-set mode_a`
 - Or keep the original features but avoid singleton clusters during automatic k selection:  
   `python3 scripts/13_phase5_phenotyping.py --min-cluster-size 2`
 
