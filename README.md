@@ -207,6 +207,22 @@ This can be slower and may require increased Docker memory. For faster runs, con
 
 ## Quickstart (recommended workflow)
 
+### 0) Minimal runnable example (no data / no Docker)
+
+This repo includes a tiny **synthetic cohort** generator + smoke test that runs the core monitoring/QC/phenotyping plumbing
+end-to-end **without** downloading `open_ms_data` and **without** running LST-AI inference.
+
+```bash
+python3 scripts/00_toy_smoke_test.py --overwrite
+```
+
+Outputs (toy-only):
+- `results/_toy/` (tables + figures + per-patient reports)
+- `data/processed/_toy_open_ms_data/` (synthetic inputs)
+- `data/processed/_toy_lstai_outputs/` (synthetic “LST-AI-like” masks + probmaps)
+
+This is for **pipeline validation only** (no clinical meaning).
+
 ### 1) Get data (recommended: clone `open_ms_data`)
 
 ```bash
