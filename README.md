@@ -1,77 +1,74 @@
-# MS-LAM — Longitudinal Brain MRI Monitoring Benchmark  
+# MS-LAM — Longitudinal Brain MRI Monitoring Benchmark
 
-**MS-LAM** is a reproducible evaluation harness for **longitudinal brain MRI monitoring**.
+**MS-LAM** asks a practical question: if you take a pretrained lesion segmentation model and run it on paired baseline / follow-up brain MRIs, how reliable are the resulting “change” signals — and what breaks them?
 
-Given paired baseline / follow-up scans, it produces **monitoring signals** (Δ lesion volume, conservative change proxies, segmentation-independent intensity-change evidence) and provides a **validation harness** for:
+It is a reproducible pipeline that turns paired scans into longitudinal monitoring signals (volume change, conservative change proxies, segmentation-independent intensity evidence), then stress-tests those signals with robustness perturbations, uncertainty quantification, and validation against change-region ground truth.
 
-- agreement to an observed **change-region GT** (when available), and  
-- **robustness sensitivity** under simulated scanner / protocol shifts (false-change risk).
+The current baseline runs on the public `open_ms_data` longitudinal MS dataset (20 patients, 2 timepoints) using **LST-AI** as a fixed pretrained segmentation engine. Segmentation is a plug-in: the harness is designed so that engines can be swapped without changing the downstream evaluation.
 
-Segmentation is treated as a **plug-in component**. The current baseline engine is **LST-AI** (pretrained; no bespoke training required).
+> **Status (Mar 2026):** core pipeline implemented and run end-to-end on `open_ms_data` + LST-AI. External benchmarks planned.
 
-> **Status (Jan 2026): actively developing.**  
-> Core monitoring + validation + robustness + uncertainty/QC + exploratory phenotyping are implemented on `open_ms_data` with LST-AI as the baseline engine.  
-> See “Project status” and “Roadmap” below for what is implemented vs planned.
+---
+
+## What we observed (on open\_ms\_data + LST-AI)
+
+These are empirical observations from running the pipeline on this specific cohort and engine. They characterise the baseline, not general claims about LST-AI or MS monitoring.
+
+**Pretrained segmentation ≠ change detection.**
+The best-case Dice between a segmentation-derived change proxy and the change-region ground truth is 0.53 (patient14); the median across 20 patients is ~0.15. Volume change (ΔV) tracks the magnitude of ground-truth change reasonably well (Spearman ~0.79), but voxel-level overlap is poor. This gap comes from both GT semantics (change-region ≠ new-lesion) and cross-timepoint segmentation instability. The conservative symmetric proxy (`chg_sym_cons`) systematically overestimates GT change volume in 18 of 20 patients (median overshoot ~5,000 mm³), a structural bias of the XOR-plus-dilation approach that is independent of the segmentation model.
+
+**Cross-timepoint intensity drift is the dominant confounder.**
+FLAIR intensity ratios between timepoints range from 0.09 to 2.28 across patients — even though the data is coregistered and N4-corrected. This drift correlates with inflated volume-change signals (r ≈ 0.59). Simulated scanner/protocol shifts confirm the pattern: even mild perturbations to the follow-up scan inject ~1,000–1,600 mm³ of spurious ΔV (median), with worst-case extremes above 20,000 mm³. Gamma (brightness/contrast) shifts show a notably non-monotonic response, suggesting interaction with LST-AI's preprocessing thresholds.
+
+**Ensemble uncertainty catches some failures but misses others.**
+Cohort-quantile QC flags (4 of 20 patients flagged) correctly identify the worst segmentation failure (patient04, Dice = 0) and cases with brain-wide instability (patient07). The flags separate into two failure modes: focal lesion-boundary disagreement (patient04, patient09) and global prediction instability (patient07, patient17). However, several high-error patients pass QC, and on the Phase 3 subset, uncertainty does not predict shift sensitivity — the most shift-vulnerable patient (patient19) has low ensemble variance. Uncertainty is a useful but incomplete QC signal.
+
+For detailed per-phase observations, see `docs/phase_notes/`.
 
 ---
 
 ## What this repo is for (and what it is not)
 
-### ✅ This repo is for
-- Building a **longitudinal monitoring baseline** that is reproducible and auditable
-- Stress-testing longitudinal metrics under **distributional shift** (scanner/protocol-like perturbations)
-- Producing **patient-level reports** and **failure-mode evidence** (worst cases, drift curves)
-- Serving as a scaffold for **uncertainty/QC**, **phenotyping**, and **external benchmarking**
-
-### ❌ This repo is not
-- A new SOTA segmentation architecture repo  
-- A clinically approved system (research/education only)
-
-MS-LAM currently supports a complete end-to-end pipeline on one public longitudinal MS dataset (`open_ms_data`). External benchmarks are planned and will be added incrementally.
+This repo is for building a **reproducible, auditable longitudinal monitoring baseline** — stress-testing it under distributional shift, quantifying uncertainty, and producing patient-level evidence of where it works and where it breaks. It is not a new segmentation architecture, and it is not a clinically approved system.
 
 ---
 
-## Key outputs (at a glance)
+## Key outputs
+
+**Monitoring + GT validation + intensity-change evidence (Phase 2)**
+![Example montage](results/figures/phase2_examples.png)
+
+Each patient panel shows: t0/t1 FLAIR with lesion mask overlay, conservative new-lesion proxy (yellow) vs change-region GT (cyan), and brainmask-normalized intensity difference with GT overlay. Patient04 (bottom) illustrates a hard failure: the GT change region exists but the segmentation misses it entirely — while the intensity-difference map still shows signal there.
+
+**Robustness sensitivity under simulated shift (Phase 3, median/IQR)**
+![Robustness curve (ΔV, robust)](results/figures/phase3_robustness_curve_deltaV_robust.png)
+
+Spurious |ΔV| introduced by shifting only the follow-up scan. Gamma shift produces the largest and most variable effect at level 1; noise and resolution shifts grow more monotonically. For mean±std curves and worst-case visualization, see `docs/phase_notes/phase3.md`.
+
+**Uncertainty QC evidence (Phase 4)**
+
+| Uncertainty overlay (t1) | Uncertainty vs error |
+|---|---|
+| ![Uncertainty overlay](results/figures/phase4_unc_overlay.png) | ![Uncertainty vs error](results/figures/phase4_unc_vs_error.png) |
+
+Left: red contour = lesion mask, heatmap = ensemble variance. Patient04 (high lesion-mean uncertainty) and patient07 (high brain-wide p95 uncertainty) are the two QC extremes; patient01 is a non-flagged reference. Right: x = mean lesion uncertainty @ t1, y = `1 − dice_chg_sym_cons`. Orange points are QC-flagged. Note that some high-error cases (e.g. patient20, patient13) are not flagged — uncertainty is a useful but incomplete error signal.
+
+<details>
+<summary><b>Full output file listing</b></summary>
 
 - Dataset inventory + sanity: `results/tables/phase0_manifest_checked.csv`
 - Baseline lesion masks: `data/processed/lstai_outputs/patientXX/{t0,t1}/lesion_mask.nii.gz`
 - Patient-level monitoring reports: `results/reports/phase2/patientXX.json`
 - Aggregate monitoring table: `results/tables/phase2_longitudinal_metrics.csv`
 - Robustness sensitivity summary: `results/tables/phase3_robustness_summary.csv`
-- Robustness curves (mean±std): `results/figures/phase3_robustness_curve_deltaV.png`, `results/figures/phase3_robustness_curve_dice.png`
-- Robustness curves (median/IQR): `results/figures/phase3_robustness_curve_deltaV_robust.png`, `results/figures/phase3_robustness_curve_dice_robust.png`
+- Robustness curves: `results/figures/phase3_robustness_curve_deltaV.png` (mean±std), `results/figures/phase3_robustness_curve_deltaV_robust.png` (median/IQR), and corresponding Dice versions
 - Uncertainty/QC table: `results/tables/phase4_uncertainty_metrics.csv`
 - Uncertainty/QC reports: `results/reports/phase4/patientXX.json`
 - Uncertainty vs shift sensitivity: `results/figures/phase4_unc_vs_shift_sens_deltaV.png`, `results/figures/phase4_unc_vs_shift_sens_dice.png`
-- Feature table (phenotyping): `results/tables/features_v1.csv`
-- Phenotyping outputs: `results/tables/phenotype_assignments.csv`, `results/tables/phase5_cluster_profiles.csv`, `results/figures/phase5_latent_space_pca.png`, `results/figures/phase5_coassignment_heatmap.png`
+- Feature table: `results/tables/features_v1.csv`
+- Phenotyping: `results/tables/phenotype_assignments.csv`, `results/tables/phase5_cluster_profiles.csv`, `results/figures/phase5_latent_space_pca.png`, `results/figures/phase5_coassignment_heatmap.png`
 
-**Example montage (monitoring + GT validation + intensity-change evidence)**  
-![Example montage](results/figures/phase2_examples.png)
-
-**Example QC evidence (uncertainty → patient flags)**  
-
-| Uncertainty overlay (t1) | Uncertainty vs error |
-|---|---|
-| ![Uncertainty overlay](results/figures/phase4_unc_overlay.png) | ![Uncertainty vs error](results/figures/phase4_unc_vs_error.png) |
-
-How to read:
-- Overlay: red contour = lesion mask; heatmap = primary uncertainty (default: ensemble variance). The figure includes `--example-patients` plus two automatically-added extremes (highest lesion-mean and highest brain-p95 uncertainty @ t1).
-- Scatter: x = mean lesion uncertainty @ t1; y = `1 - dice_chg_sym_cons` (Phase 2). Orange points are QC-flagged (`needs_review=True`).
-
-What this shows (in this cohort):
-- Uncertainty hotspots often concentrate around predicted lesions/boundaries, which is a plausible region for disagreement-driven QC.
-- QC flags tend to highlight cases with higher uncertainty and/or higher downstream error, while still allowing “high error but low lesion-uncertainty” cases (e.g., driven by brain-wide p95 rather than lesion mean).
-
-Note:
-- Per-patient QC triggers are recorded in `results/reports/phase4/patientXX.json`.
-- For run-dependent example-case interpretation, see `docs/phase_notes/phase4.md`.
-
-**Robustness sensitivity (typical risk; median/IQR)**  
-![Robustness curve (ΔV, robust)](results/figures/phase3_robustness_curve_deltaV_robust.png)
-
-Caption: x = shift severity; y = `|ΔV_shift − ΔV_base|` (mm³), shown as median with IQR band across the selected cohort.
-For full robustness outputs (including mean±std curves and worst-case visualization), see `docs/phase_notes/phase3.md`.
+</details>
 
 ---
 
@@ -205,187 +202,17 @@ This can be slower and may require increased Docker memory. For faster runs, con
 
 ---
 
-## Quickstart (recommended workflow)
+## Quickstart
 
-### 0) Minimal runnable example (no data / no Docker)
-
-This repo includes a tiny **synthetic cohort** generator + smoke test that runs the core monitoring/QC/phenotyping plumbing
-end-to-end **without** downloading `open_ms_data` and **without** running LST-AI inference.
+**Smoke test (no data, no Docker):**
 
 ```bash
 python3 scripts/00_toy_smoke_test.py --overwrite
 ```
 
-Outputs (toy-only):
-- `results/_toy/` (tables + figures + per-patient reports)
-- `data/processed/_toy_open_ms_data/` (synthetic inputs)
-- `data/processed/_toy_lstai_outputs/` (synthetic “LST-AI-like” masks + probmaps)
+This generates a tiny synthetic cohort and runs the core pipeline (monitoring → uncertainty/QC → phenotyping) end-to-end. Outputs go to `results/_toy/`. It is for pipeline validation only (no clinical meaning).
 
-This is for **pipeline validation only** (no clinical meaning).
-
-### 1) Get data (recommended: clone `open_ms_data`)
-
-```bash
-mkdir -p data/raw
-git clone --depth 1 https://github.com/muschellij2/open_ms_data.git data/raw/open_ms_data
-```
-
-We use: `data/raw/open_ms_data/longitudinal/coregistered/`.
-
-### 2) Build a manifest + run sanity checks
-
-```bash
-python3 scripts/01_make_manifest.py \
-  --data-root data/raw/open_ms_data/longitudinal/coregistered \
-  --out results/tables/phase0_manifest.csv
-
-python3 scripts/02_phase0_sanity.py \
-  --manifest results/tables/phase0_manifest.csv \
-  --out-report results/tables/phase0_sanity_report.csv \
-  --out-manifest results/tables/phase0_manifest_checked.csv
-```
-
-Optional: produce a few example figures:
-
-```bash
-python3 scripts/03_phase0_make_figures.py \
-  --manifest results/tables/phase0_manifest_checked.csv \
-  --out-dir results/figures \
-  --num-patients 3
-```
-
-### 3) Run baseline inference (LST-AI)
-
-Smoke test on 1–2 patients:
-
-```bash
-python3 scripts/04_run_lstai_batch.py --patients patient01,patient02 --timepoints both
-```
-
-Outputs per patient/timepoint:
-
-* `data/processed/lstai_outputs/patientXX/t0/lesion_mask.nii.gz`
-* `data/processed/lstai_outputs/patientXX/t0/lesion_prob.nii.gz`
-* `data/processed/lstai_outputs/patientXX/t0/lesion_prob_model1.nii.gz` (and 2/3)
-
-Example overlays:
-
-```bash
-python3 scripts/05_phase1_overlay_examples.py --patients patient01,patient02
-```
-
-Optional cohort scan (single PDF):
-
-```bash
-python3 scripts/06_phase1_qc_report.py
-```
-
-Notes:
-
-* Do **not** pass `--stripped` for `open_ms_data` by default (brainmask exists, but images are not necessarily skull-stripped).
-* In the `jqmcginnis/lst-ai:v1.2.0` Docker image, LST-AI `--output` behaves as a **directory** (despite some help text suggesting a file path).
-* With `--probability_map`, LST-AI writes probmaps under `--temp`; this repo copies them into canonical filenames.
-
-### 4) Generate monitoring metrics + validate against change-GT
-
-```bash
-python3 scripts/07_eval_longitudinal.py
-```
-
-Key outputs:
-
-* `results/tables/phase2_longitudinal_metrics.csv`
-* `results/reports/phase2/patientXX.json`
-* `results/figures/phase2_examples.png`
-* `results/figures/phase2_worst_case.png`
-* `results/figures/phase2_deltaV_hist.png`
-
-Design highlights (v1):
-
-* volumes in **mm³** (spacing-aware; never raw voxel counts)
-* conservative new-lesion proxy (mm dilation + small-component filtering)
-* symmetric change proxy (better aligned to change-region GT semantics)
-* segmentation-independent intensity-change evidence (brainmask-normalized)
-
-### 5) Robustness sensitivity under simulated shift (shift_v1)
-
-Smoke test:
-
-```bash
-python3 scripts/08_run_robustness_suite.py --patients patient01,patient02 --mode t1_only --levels 0,1
-```
-
-Representative mini-batch (rule-based selection from Phase 2 table):
-
-```bash
-python3 scripts/09_select_phase3_patients.py
-python3 scripts/08_run_robustness_suite.py \
-  --patients $(paste -sd, results/tables/phase3_selected_patients.txt) \
-  --mode t1_only \
-  --levels 0,1,2
-```
-
-Outputs:
-
-* `results/tables/phase3_robustness.csv` + `results/tables/phase3_robustness_summary.csv`
-* `results/figures/phase3_robustness_curve_deltaV.png`
-* `results/figures/phase3_robustness_curve_dice.png`
-* `results/figures/phase3_robustness_curve_deltaV_robust.png`
-* `results/figures/phase3_robustness_curve_dice_robust.png`
-* `results/figures/phase3_sensitive_case.png`
-
-Notes:
-- For interpretation (median/IQR vs mean±std; and why the sensitive-case figure shows exactly one patient), see `docs/phase_notes/phase3.md`.
-
-### 6) Uncertainty maps (voxel → patient) + QC flags
-
-Compute voxel-level uncertainty proxies from saved probability maps, aggregate to patient-level summaries, derive
-cohort-quantile thresholds, and write QC flags + reports:
-
-```bash
-python3 scripts/10_phase4_uncertainty_qc.py
-```
-
-Optional:
-- save voxel maps (can be large): `python3 scripts/10_phase4_uncertainty_qc.py --save-maps`
-- show more examples in the overlay: `--example-patients patient01,patient04,patient07`
-- annotate more points in the scatter: `--scatter-annotate qc` (default) or `all`
-- relate uncertainty to shift sensitivity (requires Phase 3 outputs): `python3 scripts/11_phase4_uncertainty_vs_shift_sensitivity.py`
-
-Outputs:
-- `results/tables/phase4_uncertainty_metrics.csv`
-- `results/tables/phase4_qc_thresholds.json`
-- `results/reports/phase4/patientXX.json`
-- `results/figures/phase4_unc_overlay.png`
-- `results/figures/phase4_unc_vs_error.png`
-- `results/tables/phase4_uncertainty_vs_shift_sensitivity.csv` *(requires Phase 3 outputs)*
-- `results/figures/phase4_unc_vs_shift_sens_deltaV.png` *(requires Phase 3 outputs)*
-- `results/figures/phase4_unc_vs_shift_sens_dice.png` *(requires Phase 3 outputs)*
-
-### 7) Exploratory phenotyping (features → latent space)
-
-Export a patient-level feature table (Phase 2 + Phase 4; optionally includes Phase 3 sensitivity if available):
-
-```bash
-python3 scripts/12_phase5_export_features.py
-```
-
-Run a minimal, reproducible phenotyping pipeline (PCA + k-means + stability):
-
-```bash
-python3 scripts/13_phase5_phenotyping.py --feature-set mode_a_pheno
-```
-
-Outputs:
-- `results/tables/features_v1.csv`
-- `results/tables/phenotype_assignments.csv`
-- `results/tables/phase5_cluster_profiles.csv`
-- `results/tables/phase5_k_selection.csv`
-- `results/figures/phase5_latent_space_pca.png`
-- `results/figures/phase5_coassignment_heatmap.png`
-
-Notes:
-- Phase 5 is exploratory; for interpretation and recommended visualizations, see `docs/phase_notes/phase5.md`.
+**Full pipeline on `open_ms_data`:** see [`docs/quickstart.md`](docs/quickstart.md) for the step-by-step walkthrough (data download → LST-AI inference → monitoring metrics → robustness → uncertainty QC → phenotyping).
 
 ---
 
@@ -397,48 +224,24 @@ Notes:
 
 ---
 
-## Roadmap (planned modules & enhancements)
+## Roadmap
 
-### Phenotyping / latent codes
+### Near-term
 
-Goal: export patient-level features and learn an exploratory latent representation for grouping / QC-aware analysis.
+- **Phase 5 enhancement**: run Phase 3 robustness on the full cohort (currently 8/20 patients) so that Phase 5 can switch to `--feature-set mode_b` and include shift-sensitivity features.
+- **External benchmarks** (ISBI 2015, SHIFTS 2022): add dataset adapters and re-run the same monitoring + validation harness.
+  - ISBI 2015: Carass et al., 2017. DOI: `10.1016/j.neuroimage.2016.12.064`. [Data portal](https://iacl.ece.jhu.edu/index.php/MSChallenge/data)
+  - SHIFTS 2022: DOI `10.5281/zenodo.7051658` / `10.5281/zenodo.7051692`. [Track page](https://shifts.grand-challenge.org/medical-dataset/)
 
-Implemented artefacts (see `docs/phase_notes/phase5.md`):
-- `results/tables/features_v1.csv`
-- `results/tables/phenotype_assignments.csv`
-- `results/tables/phase5_cluster_profiles.csv`
-- `results/tables/phase5_k_selection.csv`
-- `results/figures/phase5_latent_space_pca.png`
-- `results/figures/phase5_coassignment_heatmap.png`
+### Later
 
-Optional enhancement:
-- If Phase 3 robustness is run on more patients (ideally the full cohort), Phase 5 can switch to `--feature-set mode_b` to include shift-sensitivity features.
-
-### External benchmarks (ISBI 2015, SHIFTS 2022)
-
-Goal: add dataset adapters and re-run the same monitoring + validation harness.
-
-* ISBI 2015 (Longitudinal MS Lesion Segmentation Challenge):
-  Carass et al., 2017. DOI: `10.1016/j.neuroimage.2016.12.064`
-  Data portal: [https://iacl.ece.jhu.edu/index.php/MSChallenge/data](https://iacl.ece.jhu.edu/index.php/MSChallenge/data)
-
-* SHIFTS 2022 (MS lesion segmentation; robustness + uncertainty):
-  Zenodo Part 1: DOI `10.5281/zenodo.7051658` (access/DUA constraints)
-  Zenodo Part 2: DOI `10.5281/zenodo.7051692` (CC BY-NC-SA 4.0)
-  Track page: [https://shifts.grand-challenge.org/medical-dataset/](https://shifts.grand-challenge.org/medical-dataset/)
-
-### Normative / “digital-twin style” monitoring
-
-Deferred heavy autoencoder training. Planned as a classical, interpretable extension:
-
-* registration-based subtraction / anomaly maps
-* (optional) deformation/Jacobian proxies for atrophy-like change
+- **Normative / “digital-twin style” monitoring**: registration-based subtraction / anomaly maps; deformation/Jacobian proxies for atrophy-like change. (Deferred; no autoencoder training planned in the short term.)
 
 ---
 
-## Method notes (implementation details)
+## Method notes
 
-Detailed notes live under `docs/phase_notes/`.
+Detailed method definitions and per-phase observations live under `docs/phase_notes/` (one file per phase). Each note covers inputs, method design, outputs, and what the current run on `open_ms_data` showed.
 
 ---
 

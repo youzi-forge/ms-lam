@@ -23,6 +23,20 @@ instead of the full cohort. A simple, reproducible selection rule is:
 
 This rule is implemented in `scripts/09_select_phase3_patients.py`.
 
+## Design rationale
+
+**Why these four shift types?**
+Gamma, noise, resolution, and blur represent the four most common sources of image-level variability in longitudinal MRI: scanner recalibration / protocol changes (gamma/brightness), thermal and electronic noise (Gaussian noise), acquisition matrix and reconstruction differences (resolution), and point-spread-function variation (blur). They are also the perturbations most commonly used in domain-shift robustness literature for medical imaging. We deliberately exclude geometric distortions (B0 inhomogeneity, gradient nonlinearity) because the `open_ms_data` inputs are already coregistered — spatial shifts would conflate robustness testing with registration quality testing.
+
+**Why these specific severity levels?**
+The levels are chosen to span a "mild to moderate" range that is plausible in real multi-site longitudinal studies, not to simulate catastrophic degradation:
+- Gamma 0.8/1.2 with ±0.02 brightness offset: roughly the range of intensity nonlinearity between scanner vendors or after a software update.
+- Noise σ\_rel 0.01/0.03 of the (p99−p1) intensity range: 1% is barely perceptible; 3% is noticeable but not clinically unusual for older scanners.
+- Resolution 1.5×/2.0× in-plane downsample-then-upsample: simulates going from a high-resolution 3D acquisition to a coarser 2D protocol (common in longitudinal studies where the scanner or protocol changed between visits).
+- Blur 0.5/1.0 mm σ (optional, not enabled by default): a mild smoothing that can accompany motion or reconstruction differences.
+
+These are not calibrated to any specific scanner pair; they are order-of-magnitude plausible perturbations.
+
 ## shift_v1 suite (deterministic, levelled)
 
 Each shift is defined as `shift_name × severity_level`:
@@ -79,3 +93,25 @@ This figure intentionally shows **one** patient: the worst case selected by larg
 It is meant for diagnosing *how* shift breaks the pipeline, not for representing a typical patient.
 
 ![Phase 3 sensitive case](../../results/figures/phase3_sensitive_case.png)
+
+## Observations on open\_ms\_data (8-patient subset)
+
+### Typical sensitivity
+
+Under `t1_only` shifts, the median spurious |ΔV| at level 1 is roughly 1,100–1,400 mm³ across shift types, growing modestly at level 2 for noise and resolution. To put this in context: the cohort's median GT change volume is ~4,200 mm³, so a typical shift can inject false change equivalent to 25–35% of a typical real change.
+
+### Gamma shift is non-monotonic
+
+Gamma (brightness/contrast) shift produces the largest and most variable effect at level 1, but level 2 partially recovers for some patients. For example, patient19 has |ΔΔV| ≈ 20,800 mm³ at gamma level 1 but only ~6,400 mm³ at level 2. This non-monotonic pattern suggests that LST-AI's preprocessing (intensity clipping, standardization) has threshold effects that interact non-linearly with input brightness changes. It also explains why the IQR band for gamma is so wide on the robust curve.
+
+### Tail risk is dominated by a single patient
+
+Patient19 is the extreme outlier across all shift types and levels. Its gamma level 1 |ΔΔV| (~20,800 mm³, Dice drop ~−0.27) accounts for most of the gap between the mean±std and median/IQR curves. This validates the design choice of reporting both summary statistics: mean±std emphasizes tail risk, while median/IQR reflects the typical case.
+
+### Relative risk is higher for small-change patients
+
+For patients with small GT change (e.g. patient20: GT ~416 mm³, patient13: GT ~489 mm³), even the modest shift-induced |ΔΔV| of ~1,000–1,500 mm³ represents a ratio of 2–3× the real change — meaning the monitoring signal is completely swamped by shift-induced noise. This is a core practical risk for longitudinal monitoring: the patients where you most need to detect subtle change are also the most vulnerable to false signals.
+
+### Subset coverage caveat
+
+The 8-patient subset was selected for Phase 2 representativeness (extremes of GT size and baseline Dice), not for QC risk. Only 1 of the 4 QC-flagged patients (patient04) is included. To fully characterize how high-uncertainty cases respond to shift, Phase 3 should be extended to the full cohort.

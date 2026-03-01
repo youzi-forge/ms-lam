@@ -69,7 +69,16 @@ Runlog:
 ## Practical notes / common pitfalls
 
 - **Do not pass `--stripped` by default** for `open_ms_data`.
-  Images are coregistered/N4-corrected, but not guaranteed to be skull-stripped.
+  Images are coregistered/N4-corrected, but not guaranteed to be skull-stripped. Passing `--stripped` incorrectly will severely degrade segmentation.
 - **Docker memory**: if you see return code `137`, it is typically an OOM kill.
   Increase Docker Desktop memory and consider `--fast-mode` + fewer `--threads`.
+- **Apple Silicon**: CPU-mode Docker emulation (`--platform linux/amd64`) works but is slow (~2–2.5 min per timepoint). For faster iteration, consider running inference on a Linux machine or Colab and copying outputs back.
+
+## Observations on open\_ms\_data
+
+All 40 inference runs (20 patients × 2 timepoints) completed successfully (returncode = 0). Outputs are grid-consistent with inputs, so downstream logical operations (mask XOR, Dice, etc.) work without resampling.
+
+The most striking observation at this stage is the cross-timepoint FLAIR intensity drift visible in `results/tables/phase1_mask_volumes.csv`. The `t1_over_t0_median_ratio` ranges from 0.09 (patient20 — follow-up dramatically darker) to 2.28 (patient04 — follow-up dramatically brighter). This is not a data-loading artefact: the images are coregistered and N4-corrected, but the underlying acquisitions clearly differ in global intensity scale. This drift directly impacts segmentation stability across timepoints, and much of what Phase 2 later measures as "longitudinal change" is, in the extreme cases, really "intensity-drift-induced segmentation instability."
+
+Per-timepoint inference runtime on Apple Silicon (CPU Docker emulation, `fast_mode=True`): median ~141 seconds.
 

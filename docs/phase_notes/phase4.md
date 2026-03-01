@@ -46,6 +46,20 @@ We report simple statistics:
 - mean
 - p95 (brain-only; outlier-focused)
 
+## Design rationale
+
+**Why ensemble variance as the primary uncertainty?**
+LST-AI is a 3-model ensemble. When sub-model probability maps are available, their voxel-wise variance directly measures model disagreement — the most informative uncertainty signal we can extract without extra inference. Single-map proxies (entropy, p(1−p)) only measure "how far from 0 or 1 is the ensemble probability," which conflates genuine boundary ambiguity with calibration effects. Ensemble variance is zero when all models agree (regardless of the probability value) and high only when models disagree, making it a cleaner signal for QC.
+
+**Why p90 quantile for QC thresholds?**
+We want to flag outliers within the cohort, not define absolute "safe/unsafe" thresholds (which would require external calibration data). The 90th percentile flags the top ~10% — aggressive enough to catch meaningful outliers on a 20-patient cohort (flagging ~2 patients per metric), but not so aggressive that the majority of patients are flagged. This is a pragmatic starting point; on larger cohorts, a higher quantile (e.g. p95) might be more appropriate.
+
+**Why does `needs_review` use OR (high lesion-mean OR high brain-p95)?**
+The two metrics capture different failure modes. High lesion-mean uncertainty indicates disagreement specifically at the lesion boundaries (the model is unsure about the segmentation it produced). High brain-wide p95 indicates instability far from lesions (the model's predictions are noisy across the brain). Either condition alone is cause for concern, so the QC flag triggers on either.
+
+**Why does `change_not_confident` require BOTH high |ΔV| AND `needs_review`?**
+A large volume change is only worrying if there is reason to doubt the segmentation that produced it. If |ΔV| is large but uncertainty is low, the model is at least internally confident about the change (whether or not it is correct). Conversely, if uncertainty is high but |ΔV| is small, the segmentation may be unreliable but the monitoring conclusion ("not much changed") is unlikely to be wrong by a clinically meaningful amount. The compound flag targets the intersection: cases where a large monitoring signal might be driven by unreliable segmentation.
+
 ## QC flags (minimal, cohort-quantile thresholds)
 
 Instead of hand-tuned constants, we derive thresholds from cohort quantiles and save them to:
@@ -121,15 +135,33 @@ Interpretation goal: check whether **high uncertainty** cases also tend to be **
 Tip: for small cohorts (e.g., the representative Phase 3 subset), annotating all points can be helpful:
 - `python3 scripts/11_phase4_uncertainty_vs_shift_sensitivity.py --annotate all`
 
-## Example cases (this run)
-These brief interpretations refer to the outputs produced by `scripts/10_phase4_uncertainty_qc.py` on `open_ms_data`
-with LST-AI as the baseline engine (defaults: primary=`ens_var`, `qc_quantile=0.9`, `change_quantile=0.9`,
-`example_patients=patient01`). Exact flagged patients can change if you rerun with different settings.
+## Observations on open\_ms\_data
 
-- `patient04`: `needs_review=True` triggered by `unc_mean_lesion_t1_high` (high lesion-mean ensemble variance). In this run it also shows very high Phase 2 error (`1 - dice_chg_sym_cons`), making it a clear QC-positive example.
-- `patient07`: `needs_review=True` triggered by `unc_p95_brain_t1_high` (brain-wide high tail uncertainty), even though lesion-mean uncertainty is not among the highest. This pattern is consistent with more global instability rather than only lesion-boundary ambiguity.
-- `patient01`: `needs_review=False` and serves as a convenient non-flagged reference in the overlay.
+Settings for this run: primary=`ens_var`, `qc_quantile=0.9`, `change_quantile=0.9`, `example_patients=patient01`. Exact flagged patients may change if you rerun with different settings.
 
-For reproducible details, consult:
-- per-patient QC triggers: `results/reports/phase4/patientXX.json`
-- cohort table: `results/tables/phase4_uncertainty_metrics.csv`
+### QC flags and their two failure modes
+
+4 of 20 patients are flagged `needs_review=True`: patient04, patient07, patient09, patient17. They separate into two distinct patterns:
+
+- **Focal lesion-boundary disagreement** (patient04, patient09): triggered by `unc_mean_lesion_t1_high`. The ensemble sub-models disagree specifically around lesion boundaries. Patient04 is the worst segmentation failure in Phase 2 (Dice = 0, GT completely missed), and also has the highest lesion-mean uncertainty in the cohort (~0.164). Patient09 shows a similar pattern with high lesion-mean uncertainty (~0.128) and very low GT coverage (~0.001).
+- **Global prediction instability** (patient07, patient17): triggered by `unc_p95_brain_t1_high`. The disagreement is not confined to lesions — the brain-wide p95 of ensemble variance is elevated (patient07: ~6.3e-4, highest in cohort). Patient07 also has the largest symmetric-change volume error in Phase 2 (~58,000 mm³), consistent with widespread segmentation instability producing massive false change.
+
+### What QC misses
+
+5 patients have `dice_chg_sym_cons ≤ 0.1`, but only 2 are flagged (patient04, patient07). The unflagged cases (patient13, patient15, patient20) have unremarkable ensemble variance — the sub-models agree with each other, they are just collectively wrong. This "confident but wrong" failure mode is a known limitation of ensemble-based uncertainty and cannot be caught by variance alone.
+
+### Uncertainty vs Phase 2 error
+
+There is a moderate positive trend between `unc_ens_var_mean_lesion_t1` and `1 − dice_chg_sym_cons` (the scatter in `phase4_unc_vs_error.png`), but the correlation is not strong (r ≈ 0.45). Uncertainty is directionally useful for QC but not a reliable error predictor.
+
+### Uncertainty vs shift sensitivity (Phase 3 subset)
+
+On the 8-patient Phase 3 subset, lesion-mean uncertainty does **not** predict shift sensitivity. Patient19 — by far the most shift-vulnerable case (|ΔΔV| up to ~20,800 mm³) — has one of the lowest lesion-mean uncertainties (~0.019). This means uncertainty-based QC and robustness testing provide complementary, not redundant, information: a patient can pass the uncertainty check but still be highly vulnerable to scanner/protocol changes.
+
+### Example overlay interpretation
+
+- `patient04`: high lesion-mean uncertainty, focal hotspots around predicted lesions. Corresponds to the worst Phase 2 failure.
+- `patient07`: elevated uncertainty broadly across the brain, not just at lesion boundaries. Corresponds to the largest false-change volume in Phase 2.
+- `patient01`: low uncertainty, non-flagged reference.
+
+For per-patient QC triggers, see `results/reports/phase4/patientXX.json`.

@@ -1,3 +1,5 @@
+> **Note:** This is a copy of the upstream [LST-AI](https://github.com/CompImg/LST-AI) README, included here for reference. It is not authored by the MS-LAM project.
+
 # LST-AI - Deep Learning Ensemble for Accurate MS Lesion Segmentation
 
 Welcome to our codebase for LST-AI, the deep learning-based successor of the original [Lesion Segmentation Toolbox (LST)](https://www.applied-statistics.de/lst.html) by [Schmidt et al.](https://www.sciencedirect.com/science/article/abs/pii/S1053811911013139)
