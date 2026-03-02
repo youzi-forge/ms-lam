@@ -22,7 +22,7 @@ The voxel spacing `(sx, sy, sz)` is read from the **reference grid** (t0 FLAIR h
 - `ΔV = V1 - V0`
 
 ### Change proxies vs change GT
-Because `gt_change` is a *change-region* label (not necessarily “new lesions only”), we compute multiple proxies:
+Because `gt_change` is a *change-region* label (not necessarily “new lesions only”), multiple proxies are computed:
 
 1) **Raw new-lesion proxy (sensitive)**
 - `new_raw = mask_t1 & (~mask_t0)`
@@ -37,20 +37,20 @@ Because `gt_change` is a *change-region* label (not necessarily “new lesions o
 - `chg_sym_raw = xor(mask_t1, mask_t0)`
 - `chg_sym_cons = xor(mask_t1, mask0_dil)` (+ small-component removal)
 
-We report Dice scores to `gt_change` for each proxy (with explicit empty-mask handling):
+Dice scores to `gt_change` are reported for each proxy (with explicit empty-mask handling):
 - both empty → Dice = 1.0
 - one empty → Dice = 0.0
 
-For each proxy we also report a simple **volume error** w.r.t. `gt_change`:
+For each proxy, a simple **volume error** w.r.t. `gt_change` is also reported:
 - `volume_error_mm3 = proxy_volume_mm3 - gt_change_volume_mm3`
 
 ## GT diagnostics (interpretability)
-To make low-Dice cases easier to explain, we also report:
-- `gt_covered_by_t1_frac`: fraction of `gt_change` voxels covered by the **t1 lesion mask** (a crude “did we hit the GT?” check).
+To make low-Dice cases easier to explain, the pipeline also reports:
+- `gt_covered_by_t1_frac`: fraction of `gt_change` voxels covered by the **t1 lesion mask** (a crude “did the model hit the GT?” check).
 - `gt_outside_brain_frac`: fraction of `gt_change` voxels outside the provided `brainmask` (flags potential mask/GT inconsistencies).
 
 ## Intensity-change (segmentation-independent evidence)
-Direct `|FLAIR_t1 - FLAIR_t0|` is sensitive to global scaling differences. We therefore:
+Direct `|FLAIR_t1 - FLAIR_t0|` is sensitive to global scaling differences. To handle this, the pipeline:
 - robust-normalize each timepoint **within the brainmask** using percentile scaling (p1–p99),
 - compute `diff = |norm(t1) - norm(t0)|` within the brainmask,
 - report `diff_mean` and `diff_p95`.
@@ -58,7 +58,7 @@ Direct `|FLAIR_t1 - FLAIR_t0|` is sensitive to global scaling differences. We th
 ## Design rationale
 
 **Why two families of change proxy (new-lesion + symmetric)?**
-The change-region GT in `open_ms_data` labels any visually identifiable change — not only newly appearing lesions, but also enlargement, shrinkage, or altered conspicuity. A "new-lesion" proxy (t1 minus t0) is the natural clinical quantity, but it misses change that manifests as lesion disappearance or boundary shift. The symmetric proxy (XOR of both masks) captures all voxels that differ between timepoints, which is a better semantic match to a change-region annotation. We report both because they answer different questions.
+The change-region GT in `open_ms_data` labels any visually identifiable change — not only newly appearing lesions, but also enlargement, shrinkage, or altered conspicuity. A "new-lesion" proxy (t1 minus t0) is the natural clinical quantity, but it misses change that manifests as lesion disappearance or boundary shift. The symmetric proxy (XOR of both masks) captures all voxels that differ between timepoints, which is a better semantic match to a change-region annotation. Both are reported because they answer different questions.
 
 **Why 2 mm dilation radius?**
 The conservative proxy dilates the baseline mask before computing new/changed regions. The radius needs to be large enough to absorb boundary jitter from segmentation noise and residual misalignment (typically sub-voxel to ~1 voxel), but small enough not to swallow genuinely new lesions that appear near existing ones. At the voxel spacings in this dataset (~0.7–0.9 mm in-plane), 2 mm corresponds to roughly 2–3 voxels — enough to suppress most boundary jitter while preserving lesions that are spatially distinct from the baseline.

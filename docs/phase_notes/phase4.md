@@ -15,7 +15,7 @@ LST-AI-specific enhancements when available.
 
 ## Uncertainty maps
 
-We support multiple voxel-wise uncertainty definitions:
+Multiple voxel-wise uncertainty definitions are supported:
 
 ### 1) Probability-map proxies (no extra inference)
 - `unc_prob_entropy`: binary entropy of `p(x)`
@@ -36,23 +36,23 @@ You can switch to a proxy-based primary uncertainty if sub-model maps are missin
 
 ## Voxel→patient aggregation
 
-For each timepoint, we summarize uncertainty over interpretable regions:
+For each timepoint, uncertainty is summarized over interpretable regions:
 - `brain`: within `brainmask`
 - `lesion`: within predicted lesion mask
 - `boundary`: a conservative **outer boundary band** around lesions:
   - `boundary = dilate(lesion, r_mm) & ~lesion` (restricted to brain)
 
-We report simple statistics:
+Reported statistics:
 - mean
 - p95 (brain-only; outlier-focused)
 
 ## Design rationale
 
 **Why ensemble variance as the primary uncertainty?**
-LST-AI is a 3-model ensemble. When sub-model probability maps are available, their voxel-wise variance directly measures model disagreement — the most informative uncertainty signal we can extract without extra inference. Single-map proxies (entropy, p(1−p)) only measure "how far from 0 or 1 is the ensemble probability," which conflates genuine boundary ambiguity with calibration effects. Ensemble variance is zero when all models agree (regardless of the probability value) and high only when models disagree, making it a cleaner signal for QC.
+LST-AI is a 3-model ensemble. When sub-model probability maps are available, their voxel-wise variance directly measures model disagreement — the most informative uncertainty signal extractable without extra inference. Single-map proxies (entropy, p(1−p)) only measure "how far from 0 or 1 is the ensemble probability," which conflates genuine boundary ambiguity with calibration effects. Ensemble variance is zero when all models agree (regardless of the probability value) and high only when models disagree, making it a cleaner signal for QC.
 
 **Why p90 quantile for QC thresholds?**
-We want to flag outliers within the cohort, not define absolute "safe/unsafe" thresholds (which would require external calibration data). The 90th percentile flags the top ~10% — aggressive enough to catch meaningful outliers on a 20-patient cohort (flagging ~2 patients per metric), but not so aggressive that the majority of patients are flagged. This is a pragmatic starting point; on larger cohorts, a higher quantile (e.g. p95) might be more appropriate.
+The goal is to flag outliers within the cohort, not define absolute "safe/unsafe" thresholds (which would require external calibration data). The 90th percentile flags the top ~10% — aggressive enough to catch meaningful outliers on a 20-patient cohort (flagging ~2 patients per metric), but not so aggressive that the majority of patients are flagged. This is a pragmatic starting point; on larger cohorts, a higher quantile (e.g. p95) might be more appropriate.
 
 **Why does `needs_review` use OR (high lesion-mean OR high brain-p95)?**
 The two metrics capture different failure modes. High lesion-mean uncertainty indicates disagreement specifically at the lesion boundaries (the model is unsure about the segmentation it produced). High brain-wide p95 indicates instability far from lesions (the model's predictions are noisy across the brain). Either condition alone is cause for concern, so the QC flag triggers on either.
@@ -62,7 +62,7 @@ A large volume change is only worrying if there is reason to doubt the segmentat
 
 ## QC flags (minimal, cohort-quantile thresholds)
 
-Instead of hand-tuned constants, we derive thresholds from cohort quantiles and save them to:
+Instead of hand-tuned constants, thresholds are derived from cohort quantiles and saved to:
 - `results/tables/phase4_qc_thresholds.json`
 
 Minimal flags:
@@ -75,7 +75,7 @@ Minimal flags:
 These are meant as initial QC rules; thresholds and rules can evolve.
 
 ## Grid consistency
-We explicitly check that `lesion_prob`, `lesion_mask`, `brainmask`, and the reference FLAIR are on the same grid
+The runner explicitly checks that `lesion_prob`, `lesion_mask`, `brainmask`, and the reference FLAIR are on the same grid
 (shape + affine; spacing differences are recorded). Resampling is **not** performed by default; mismatches are surfaced in
 the per-patient `warnings`.
 
@@ -101,7 +101,7 @@ For comparability, the uncertainty color scale is shared across the displayed pa
 lesion/boundary region when available (otherwise brainmask-wide).
 
 ### Uncertainty vs error scatter
-We plot:
+The scatter shows:
 - x: `unc_{primary}_mean_lesion_t1`
 - y: `1 - dice_chg_sym_cons` (from Phase 2)
 

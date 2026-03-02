@@ -6,24 +6,22 @@ It is a reproducible pipeline that turns paired scans into longitudinal monitori
 
 The current baseline runs on the public `open_ms_data` longitudinal MS dataset (20 patients, 2 timepoints) using **LST-AI** as a fixed pretrained segmentation engine. Segmentation is a plug-in: the harness is designed so that engines can be swapped without changing the downstream evaluation.
 
-> **Status (Mar 2026):** core pipeline implemented and run end-to-end on `open_ms_data` + LST-AI. External benchmarks planned.
+> **Status:** core pipeline implemented and run end-to-end on `open_ms_data` + LST-AI. External benchmarks planned.
 
 ---
 
-## What we observed (on open\_ms\_data + LST-AI)
+## Observations (on open\_ms\_data + LST-AI)
 
-These are empirical observations from running the pipeline on this specific cohort and engine. They characterise the baseline, not general claims about LST-AI or MS monitoring.
+Empirical observations from this specific cohort and engine — not general claims about LST-AI or MS monitoring. Per-phase details in [`docs/phase_notes/`](docs/phase_notes/).
 
 **Pretrained segmentation ≠ change detection.**
-The best-case Dice between a segmentation-derived change proxy and the change-region ground truth is 0.53 (patient14); the median across 20 patients is ~0.15. Volume change (ΔV) tracks the magnitude of ground-truth change reasonably well (Spearman ~0.79), but voxel-level overlap is poor. This gap comes from both GT semantics (change-region ≠ new-lesion) and cross-timepoint segmentation instability. The conservative symmetric proxy (`chg_sym_cons`) systematically overestimates GT change volume in 18 of 20 patients (median overshoot ~5,000 mm³), a structural bias of the XOR-plus-dilation approach that is independent of the segmentation model.
+Median Dice between segmentation-derived change proxies and the change-region GT is ~0.15 (best case 0.53). Volume change tracks GT magnitude reasonably (Spearman ~0.79), but voxel-level overlap is poor — and the conservative proxy systematically overestimates GT in 18/20 patients.
 
 **Cross-timepoint intensity drift is the dominant confounder.**
-FLAIR intensity ratios between timepoints range from 0.09 to 2.28 across patients — even though the data is coregistered and N4-corrected. This drift correlates with inflated volume-change signals (r ≈ 0.59). Simulated scanner/protocol shifts confirm the pattern: even mild perturbations to the follow-up scan inject ~1,000–1,600 mm³ of spurious ΔV (median), with worst-case extremes above 20,000 mm³. Gamma (brightness/contrast) shifts show a notably non-monotonic response, suggesting interaction with LST-AI's preprocessing thresholds.
+FLAIR intensity ratios between timepoints range from 0.09 to 2.28 despite coregistration and N4 correction, correlating with inflated ΔV (r ≈ 0.59). Simulated scanner/protocol shifts inject ~1,000–1,600 mm³ of spurious ΔV at mild severity, with worst-case extremes above 20,000 mm³.
 
 **Ensemble uncertainty catches some failures but misses others.**
-Cohort-quantile QC flags (4 of 20 patients flagged) correctly identify the worst segmentation failure (patient04, Dice = 0) and cases with brain-wide instability (patient07). The flags separate into two failure modes: focal lesion-boundary disagreement (patient04, patient09) and global prediction instability (patient07, patient17). However, several high-error patients pass QC, and on the Phase 3 subset, uncertainty does not predict shift sensitivity — the most shift-vulnerable patient (patient19) has low ensemble variance. Uncertainty is a useful but incomplete QC signal.
-
-For detailed per-phase observations, see `docs/phase_notes/`.
+Cohort-quantile QC flags 4/20 patients, correctly identifying the worst segmentation failure (patient04) and brain-wide instability (patient07). But several high-error patients pass QC, and the most shift-vulnerable patient (patient19) has low ensemble variance — uncertainty and robustness testing provide complementary, not redundant, information.
 
 ---
 
@@ -156,7 +154,7 @@ https://github.com/muschellij2/open_ms_data
 > **License / attribution**: open_ms_data is released under CC-BY; please follow the upstream repository’s attribution instructions and cite the references listed there.
 
 ### Baseline segmentation engine (implemented): **LST-AI** (T1 + FLAIR)
-We use **LST-AI** as a fixed pretrained MS lesion segmentation engine via Docker:
+MS-LAM uses **LST-AI** as a fixed pretrained MS lesion segmentation engine via Docker:
 
 - CPU/GPU capable CLI
 - exports lesion masks and probability maps (ensemble + sub-models)

@@ -3,7 +3,7 @@
 This phase stress-tests the **monitoring + validation harness** (Phases 1–2) under controlled input perturbations
 that mimic scanner/protocol heterogeneity.
 
-We treat LST-AI as a fixed pretrained engine and measure how longitudinal metrics change under shift.
+LST-AI is treated as a fixed pretrained engine; the goal is to measure how longitudinal metrics change under shift.
 
 ## Experimental design (v1)
 
@@ -11,7 +11,7 @@ We treat LST-AI as a fixed pretrained engine and measure how longitudinal metric
 Default mode is **`t1_only`**: only the follow-up (t1) inputs are shifted, while t0 is kept unchanged.
 This matches the practical monitoring scenario where scanner/protocol differs at follow-up and may create *spurious change*.
 
-We also support a control mode **`both`** (shift t0 and t1 with the same parameters). In a healthy pipeline,
+A control mode **`both`** is also supported (shift t0 and t1 with the same parameters). In a healthy pipeline,
 same-source shifts should generally perturb longitudinal **Δ** metrics less than shifting only one timepoint.
 
 ## Suggested patient subset (representative mini-batch)
@@ -26,7 +26,7 @@ This rule is implemented in `scripts/09_select_phase3_patients.py`.
 ## Design rationale
 
 **Why these four shift types?**
-Gamma, noise, resolution, and blur represent the four most common sources of image-level variability in longitudinal MRI: scanner recalibration / protocol changes (gamma/brightness), thermal and electronic noise (Gaussian noise), acquisition matrix and reconstruction differences (resolution), and point-spread-function variation (blur). They are also the perturbations most commonly used in domain-shift robustness literature for medical imaging. We deliberately exclude geometric distortions (B0 inhomogeneity, gradient nonlinearity) because the `open_ms_data` inputs are already coregistered — spatial shifts would conflate robustness testing with registration quality testing.
+Gamma, noise, resolution, and blur represent the four most common sources of image-level variability in longitudinal MRI: scanner recalibration / protocol changes (gamma/brightness), thermal and electronic noise (Gaussian noise), acquisition matrix and reconstruction differences (resolution), and point-spread-function variation (blur). They are also the perturbations most commonly used in domain-shift robustness literature for medical imaging. Geometric distortions are deliberately excluded (B0 inhomogeneity, gradient nonlinearity) because the `open_ms_data` inputs are already coregistered — spatial shifts would conflate robustness testing with registration quality testing.
 
 **Why these specific severity levels?**
 The levels are chosen to span a "mild to moderate" range that is plausible in real multi-site longitudinal studies, not to simulate catastrophic degradation:
@@ -71,7 +71,7 @@ The Phase 3 runner produces:
 - Dice drops (vs change-GT) under shift indicate degraded agreement with observed change regions, helping diagnose “unsafe” conditions.
 
 ### Mean±std vs median(IQR)
-We save both:
+Both are saved:
 - **mean±std** curves: emphasize *tail risk* (but can be dominated by outliers on small cohorts),
 - **median(IQR)** curves: emphasize *typical* sensitivity and are more robust to a single extreme case.
 

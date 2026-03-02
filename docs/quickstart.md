@@ -9,7 +9,7 @@ mkdir -p data/raw
 git clone --depth 1 https://github.com/muschellij2/open_ms_data.git data/raw/open_ms_data
 ```
 
-We use: `data/raw/open_ms_data/longitudinal/coregistered/`.
+Path used: `data/raw/open_ms_data/longitudinal/coregistered/`.
 
 ## 2) Build a manifest + run sanity checks
 

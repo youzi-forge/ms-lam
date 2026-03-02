@@ -15,7 +15,7 @@ This module is intentionally **exploratory**:
 
 ## Feature table (one row per patient)
 
-We export a single table that mixes:
+The export is a single table that mixes:
 - **monitoring features** (model-based + segmentation-independent evidence),
 - **uncertainty/QC features**,
 - and (explicitly labeled) **evaluation features** that depend on the change-GT (dataset-specific).
@@ -37,7 +37,7 @@ Phase 5 is explicitly exploratory (N=20). The goal is not to discover optimal cl
 Several features (e.g. lesion volume, volume error) span orders of magnitude and contain outliers (patient07's 58,000 mm³ volume error, patient19's 22,000 mm³ ΔV). Standard z-scoring would let these outliers dominate the variance. Robust scaling (using median and IQR instead of mean and standard deviation) reduces outlier influence on the feature space, so that clustering reflects the overall patient distribution rather than just the extremes.
 
 **Why silhouette score for k selection?**
-Silhouette is a simple, internal-validity metric that balances cluster cohesion and separation without requiring a generative model. On a 20-patient dataset, more sophisticated methods (Gap statistic, BIC-based selection) tend to be unstable. Silhouette's main limitation — it favours convex, similarly-sized clusters — is acceptable here because we are not looking for complex cluster shapes.
+Silhouette is a simple, internal-validity metric that balances cluster cohesion and separation without requiring a generative model. On a 20-patient dataset, more sophisticated methods (Gap statistic, BIC-based selection) tend to be unstable. Silhouette's main limitation — it favours convex, similarly-sized clusters — is acceptable here because the analysis is not looking for complex cluster shapes.
 
 **Why 50 random seeds for stability?**
 K-means results depend on initialisation. Running 50 seeds and computing a co-assignment matrix (how often each pair of patients lands in the same cluster) is a lightweight way to check whether the partition is an artefact of a lucky initialisation or a genuine structure. 50 seeds is enough to estimate co-assignment probabilities with ~±0.07 precision (binomial standard error), which is sufficient to distinguish "always together" from "sometimes together" at this sample size. More seeds would marginally improve precision but add runtime.
