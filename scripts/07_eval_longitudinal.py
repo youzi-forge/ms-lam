@@ -2,142 +2,14 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import math
 import time
 from pathlib import Path
 
 import numpy as np
 
-
-def _read_manifest(path: Path) -> list[dict[str, str]]:
-    with path.open("r", newline="") as f:
-        return list(csv.DictReader(f))
-
-
-def _parse_patients_arg(patients: str) -> set[str]:
-    return {p.strip() for p in patients.split(",") if p.strip()}
-
-
-def _ensure_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-
-
-def _save_json(path: Path, obj: object) -> None:
-    path.write_text(json.dumps(obj, indent=2))
-
-
 def _bool(arr: np.ndarray) -> np.ndarray:
     return (arr > 0)
-
-
-def _safe_float(x: float) -> float:
-    return float(x) if math.isfinite(float(x)) else float("nan")
-
-
-def _make_patient_change_figure(
-    *,
-    patient_id: str,
-    flair0: np.ndarray,
-    flair1: np.ndarray,
-    brain: np.ndarray,
-    mask0: np.ndarray,
-    mask1: np.ndarray,
-    gt: np.ndarray,
-    new_mask: np.ndarray,
-    diff_norm: np.ndarray,
-    out_path: Path,
-    title_suffix: str = "",
-    scale: str = "per-timepoint",
-) -> None:
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    gray = plt.get_cmap("gray").copy()
-    gray.set_bad(color="black")
-
-    bm = brain > 0
-    m0 = _bool(mask0)
-    m1 = _bool(mask1)
-    gt = _bool(gt)
-    new_mask = _bool(new_mask)
-
-    union = gt | new_mask | m0 | m1
-    if bool(union.any()):
-        per_z = union.sum(axis=(0, 1))
-        z = int(np.argmax(per_z))
-    else:
-        per_z = bm.sum(axis=(0, 1))
-        z = int(np.argmax(per_z)) if per_z.size else int(flair0.shape[2] // 2)
-
-    f0 = flair0[:, :, z].astype(np.float32, copy=False).copy()
-    f1 = flair1[:, :, z].astype(np.float32, copy=False).copy()
-    b2 = bm[:, :, z]
-    f0[~b2] = np.nan
-    f1[~b2] = np.nan
-
-    def robust_vmin_vmax(vals: np.ndarray, p_lo: float = 1.0, p_hi: float = 99.0) -> tuple[float, float]:
-        vals = vals[np.isfinite(vals)]
-        if vals.size == 0:
-            return 0.0, 1.0
-        lo = float(np.percentile(vals, p_lo))
-        hi = float(np.percentile(vals, p_hi))
-        if not (math.isfinite(lo) and math.isfinite(hi)) or hi <= lo:
-            lo = float(np.min(vals))
-            hi = float(np.max(vals))
-            if hi <= lo:
-                hi = lo + 1.0
-        return lo, hi
-
-    v0 = f0[b2].reshape(-1)
-    v1 = f1[b2].reshape(-1)
-    if scale == "shared":
-        vmin, vmax = robust_vmin_vmax(np.concatenate([v0, v1]), 1, 99)
-        vmin0, vmax0 = vmin, vmax
-        vmin1, vmax1 = vmin, vmax
-    else:
-        vmin0, vmax0 = robust_vmin_vmax(v0, 1, 99)
-        vmin1, vmax1 = robust_vmin_vmax(v1, 1, 99)
-
-    d = diff_norm[:, :, z].astype(np.float32, copy=False).copy()
-    d[~b2] = np.nan
-    dvals = d[b2].reshape(-1)
-    _, dvmax = robust_vmin_vmax(dvals, 1, 99.5)
-
-    fig = plt.figure(figsize=(12, 9), layout="constrained")
-    axes = fig.subplots(2, 2)
-    for ax in axes.reshape(-1):
-        ax.set_axis_off()
-
-    axes[0, 0].imshow(f0.T, cmap=gray, vmin=vmin0, vmax=vmax0, origin="lower", interpolation="nearest")
-    if bool(m0[:, :, z].any()):
-        axes[0, 0].contour(m0[:, :, z].T.astype(float), levels=[0.5], colors="red", linewidths=1)
-    axes[0, 0].set_title("t0 FLAIR + lesion(mask)", fontsize=12)
-
-    axes[0, 1].imshow(f1.T, cmap=gray, vmin=vmin1, vmax=vmax1, origin="lower", interpolation="nearest")
-    if bool(m1[:, :, z].any()):
-        axes[0, 1].contour(m1[:, :, z].T.astype(float), levels=[0.5], colors="red", linewidths=1)
-    axes[0, 1].set_title("t1 FLAIR + lesion(mask)", fontsize=12)
-
-    axes[1, 0].imshow(f1.T, cmap=gray, vmin=vmin1, vmax=vmax1, origin="lower", interpolation="nearest")
-    if bool(new_mask[:, :, z].any()):
-        axes[1, 0].contour(new_mask[:, :, z].T.astype(float), levels=[0.5], colors="yellow", linewidths=1)
-    if bool(gt[:, :, z].any()):
-        axes[1, 0].contour(gt[:, :, z].T.astype(float), levels=[0.5], colors="cyan", linewidths=1)
-    axes[1, 0].set_title("t1 + new_proxy(yellow) + GT_change(cyan)", fontsize=12)
-
-    im = axes[1, 1].imshow(d.T, cmap="magma", vmin=0.0, vmax=dvmax, origin="lower", interpolation="nearest")
-    if bool(gt[:, :, z].any()):
-        axes[1, 1].contour(gt[:, :, z].T.astype(float), levels=[0.5], colors="cyan", linewidths=1)
-    axes[1, 1].set_title("|norm(t1)-norm(t0)| + GT_change(cyan)", fontsize=12)
-    fig.colorbar(im, ax=axes[1, 1], fraction=0.045, pad=0.02)
-
-    fig.suptitle(f"{patient_id} (z={z}){title_suffix}", fontsize=14)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=200)
-    plt.close(fig)
 
 
 def main() -> int:
@@ -178,13 +50,12 @@ def main() -> int:
     out_csv = (repo_root / args.out_csv).resolve() if not args.out_csv.is_absolute() else args.out_csv.resolve()
     out_reports = (repo_root / args.out_reports_dir).resolve() if not args.out_reports_dir.is_absolute() else args.out_reports_dir.resolve()
     out_fig = (repo_root / args.out_fig_dir).resolve() if not args.out_fig_dir.is_absolute() else args.out_fig_dir.resolve()
-    _ensure_dir(out_reports)
-    _ensure_dir(out_fig)
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
 
     import sys
 
     sys.path.insert(0, str(repo_root / "src"))
+    from mslam.common.cli_utils import ensure_dir, parse_patients_arg, read_manifest, safe_float, save_json
+    from mslam.common.plotting import setup_matplotlib_env
     from mslam.io.nifti import allclose_affine, allclose_zooms, read_array, read_header
     from mslam.metrics.longitudinal_metrics import (
         dice_coefficient,
@@ -193,11 +64,16 @@ def main() -> int:
         remove_small_components,
         volume_mm3,
     )
+    from mslam.reporting.longitudinal_figures import save_patient_change_figure
 
-    rows = _read_manifest(manifest_path)
+    ensure_dir(out_reports)
+    ensure_dir(out_fig)
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    rows = read_manifest(manifest_path)
     ok_rows = [r for r in rows if r.get("ok", "True") == "True"]
     if args.patients.strip():
-        wanted = _parse_patients_arg(args.patients)
+        wanted = parse_patients_arg(args.patients)
         ok_rows = [r for r in ok_rows if r.get("patient_id") in wanted]
 
     if not ok_rows:
@@ -264,7 +140,7 @@ def main() -> int:
             warnings.append("missing_files:" + ",".join(p.name for p in missing))
             report_path = out_reports / f"{pid}.json"
             report = {"patient_id": pid, "ok": False, "warnings": warnings, "errors": ["missing required files"]}
-            _save_json(report_path, report)
+            save_json(report_path, report)
             patient_metrics.append(
                 {
                     "patient_id": pid,
@@ -300,7 +176,7 @@ def main() -> int:
                 "warnings": warnings,
                 "errors": ["grid mismatch; resampling is not enabled in v1"],
             }
-            _save_json(report_path, report)
+            save_json(report_path, report)
             patient_metrics.append(
                 {
                     "patient_id": pid,
@@ -411,8 +287,8 @@ def main() -> int:
                 "lesion_prob_t1": str(prob1_path.relative_to(repo_root)) if prob1_path.exists() else "",
             },
             "warnings": warnings,
-            "lesion_volumes_mm3": {"t0": _safe_float(v0), "t1": _safe_float(v1), "delta": _safe_float(dv)},
-            "change_gt_mm3": {"volume": _safe_float(gt_vol), "voxels": int(gt_b.sum())},
+            "lesion_volumes_mm3": {"t0": safe_float(v0), "t1": safe_float(v1), "delta": safe_float(dv)},
+            "change_gt_mm3": {"volume": safe_float(gt_vol), "voxels": int(gt_b.sum())},
             "gt_diagnostics": {
                 "covered_by_t1_lesion_mask_frac": gt_covered_by_t1_frac,
                 "outside_brainmask_frac": gt_outside_brain_frac,
@@ -422,36 +298,36 @@ def main() -> int:
             "proxies": {
                 "new_raw": {
                     "voxels": int(new_raw.sum()),
-                    "volume_mm3": _safe_float(new_raw_vol),
-                    "volume_error_mm3": _safe_float(new_raw_vol - gt_vol),
-                    "abs_volume_error_mm3": _safe_float(abs(new_raw_vol - gt_vol)),
-                    "dice_to_gt": _safe_float(dice_new_raw),
+                    "volume_mm3": safe_float(new_raw_vol),
+                    "volume_error_mm3": safe_float(new_raw_vol - gt_vol),
+                    "abs_volume_error_mm3": safe_float(abs(new_raw_vol - gt_vol)),
+                    "dice_to_gt": safe_float(dice_new_raw),
                 },
                 "new_conservative": {
                     "voxels": int(new_cons.sum()),
-                    "volume_mm3": _safe_float(new_cons_vol),
-                    "volume_error_mm3": _safe_float(new_cons_vol - gt_vol),
-                    "abs_volume_error_mm3": _safe_float(abs(new_cons_vol - gt_vol)),
-                    "dice_to_gt": _safe_float(dice_new_cons),
+                    "volume_mm3": safe_float(new_cons_vol),
+                    "volume_error_mm3": safe_float(new_cons_vol - gt_vol),
+                    "abs_volume_error_mm3": safe_float(abs(new_cons_vol - gt_vol)),
+                    "dice_to_gt": safe_float(dice_new_cons),
                 },
                 "chg_sym_raw": {
                     "voxels": int(chg_sym_raw.sum()),
-                    "volume_mm3": _safe_float(sym_raw_vol),
-                    "volume_error_mm3": _safe_float(sym_raw_vol - gt_vol),
-                    "abs_volume_error_mm3": _safe_float(abs(sym_raw_vol - gt_vol)),
-                    "dice_to_gt": _safe_float(dice_sym_raw),
+                    "volume_mm3": safe_float(sym_raw_vol),
+                    "volume_error_mm3": safe_float(sym_raw_vol - gt_vol),
+                    "abs_volume_error_mm3": safe_float(abs(sym_raw_vol - gt_vol)),
+                    "dice_to_gt": safe_float(dice_sym_raw),
                 },
                 "chg_sym_cons": {
                     "voxels": int(chg_sym_cons.sum()),
-                    "volume_mm3": _safe_float(sym_cons_vol),
-                    "volume_error_mm3": _safe_float(sym_cons_vol - gt_vol),
-                    "abs_volume_error_mm3": _safe_float(abs(sym_cons_vol - gt_vol)),
-                    "dice_to_gt": _safe_float(dice_sym_cons),
+                    "volume_mm3": safe_float(sym_cons_vol),
+                    "volume_error_mm3": safe_float(sym_cons_vol - gt_vol),
+                    "abs_volume_error_mm3": safe_float(abs(sym_cons_vol - gt_vol)),
+                    "dice_to_gt": safe_float(dice_sym_cons),
                 },
             },
             "intensity_change": {"t0": t0_stats, "t1": t1_stats, "diff": diff_stats},
         }
-        _save_json(report_path, report)
+        save_json(report_path, report)
 
         patient_metrics.append(
             {
@@ -566,6 +442,7 @@ def main() -> int:
                 "diff_norm": diff_n,
             }
 
+        setup_matplotlib_env(repo_root)
         import matplotlib
 
         matplotlib.use("Agg")
@@ -584,7 +461,7 @@ def main() -> int:
         # Worst-case by dice_chg_sym_cons (lower is worse)
         worst = min(ok_metrics, key=lambda x: float(x.get("dice_chg_sym_cons", 1.0)))
         wa = load_for_fig(worst)
-        _make_patient_change_figure(
+        save_patient_change_figure(
             patient_id=worst["patient_id"],
             flair0=wa["flair0"],
             flair1=wa["flair1"],
@@ -613,11 +490,6 @@ def main() -> int:
 
         ex_metrics = [m for m in ok_metrics if m["patient_id"] in set(example_ids)]
         if ex_metrics:
-            import matplotlib
-
-            matplotlib.use("Agg")
-            import matplotlib.pyplot as plt
-
             n = len(ex_metrics)
             fig = plt.figure(figsize=(12, 4.6 * n), layout="constrained")
             gs = fig.add_gridspec(n, 1)
@@ -627,7 +499,7 @@ def main() -> int:
                 # Render to a temporary png per patient, then embed.
                 tmp = out_fig / f"_tmp_phase2_{m['patient_id']}.png"
                 a = load_for_fig(m)
-                _make_patient_change_figure(
+                save_patient_change_figure(
                     patient_id=m["patient_id"],
                     flair0=a["flair0"],
                     flair1=a["flair1"],

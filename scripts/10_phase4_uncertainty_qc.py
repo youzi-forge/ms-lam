@@ -2,70 +2,9 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import math
 import time
 from pathlib import Path
-
-
-def _read_manifest(path: Path) -> list[dict[str, str]]:
-    with path.open("r", newline="") as f:
-        return list(csv.DictReader(f))
-
-
-def _parse_patients_arg(patients: str) -> set[str]:
-    return {p.strip() for p in patients.split(",") if p.strip()}
-
-
-def _ensure_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-
-
-def _ensure_parent(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-
-def _save_json(path: Path, obj: object) -> None:
-    path.write_text(json.dumps(obj, indent=2))
-
-
-def _safe_float(x: float) -> float:
-    return float(x) if math.isfinite(float(x)) else float("nan")
-
-
-def _write_nifti_like(ref_path: Path, out_path: Path, data) -> None:
-    import nibabel as nib
-    import numpy as np
-
-    ref_img = nib.load(str(ref_path))
-    arr = np.asarray(data)
-    if tuple(arr.shape) != tuple(ref_img.shape[:3]):
-        raise ValueError(f"Shape mismatch for write: ref={ref_img.shape} vs data={arr.shape}")
-    out_img = nib.Nifti1Image(arr.astype(np.float32, copy=False), ref_img.affine, ref_img.header)
-    out_img.header.set_data_dtype(np.float32)
-    try:
-        out_img.header.set_zooms(ref_img.header.get_zooms()[:3])
-    except Exception:
-        pass
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    nib.save(out_img, str(out_path))
-
-
-def _robust_vmin_vmax(vals, p_lo: float = 1.0, p_hi: float = 99.0) -> tuple[float, float]:
-    import numpy as np
-
-    vals = np.asarray(vals)
-    vals = vals[np.isfinite(vals)]
-    if vals.size == 0:
-        return 0.0, 1.0
-    lo = float(np.percentile(vals, p_lo))
-    hi = float(np.percentile(vals, p_hi))
-    if not (math.isfinite(lo) and math.isfinite(hi)) or hi <= lo:
-        lo = float(np.min(vals))
-        hi = float(np.max(vals))
-        if hi <= lo:
-            hi = lo + 1.0
-    return lo, hi
 
 
 def _make_uncertainty_overlay_figure(
@@ -79,6 +18,7 @@ def _make_uncertainty_overlay_figure(
     import numpy as np
 
     import matplotlib
+    from mslam.common.plotting import robust_vmin_vmax
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -92,6 +32,7 @@ def _make_uncertainty_overlay_figure(
 
     # Use a shared uncertainty scale across displayed patients for comparability.
     umax_global = 0.0
+    flair_values_shared: list[np.ndarray] = []
     for pid in patient_ids:
         d = rows_by_patient[pid]
         brain = d["brainmask"]
@@ -101,15 +42,22 @@ def _make_uncertainty_overlay_figure(
         z = int(d["z"])
         bm = brain[:, :, z] > 0
         u = unc[:, :, z].astype(np.float32, copy=False)
+        flair = d["flair_t1"][:, :, z].astype(np.float32, copy=False)
+        flair_values_shared.append(flair[bm].reshape(-1))
         region = (lesion[:, :, z] > 0) | (boundary[:, :, z] > 0)
         region = region & bm
         if bool(region.any()):
-            umax = _robust_vmin_vmax(u[region].reshape(-1), 1, 99.5)[1]
+            umax = robust_vmin_vmax(u[region].reshape(-1), 1.0, 99.5)[1]
         else:
-            umax = _robust_vmin_vmax(u[bm].reshape(-1), 1, 99.5)[1]
+            umax = robust_vmin_vmax(u[bm].reshape(-1), 1.0, 99.5)[1]
         umax_global = max(float(umax_global), float(umax))
     if not math.isfinite(float(umax_global)) or float(umax_global) <= 0:
         umax_global = 1.0
+    shared_flair_vmin, shared_flair_vmax = robust_vmin_vmax(
+        np.concatenate(flair_values_shared) if flair_values_shared else np.array([], dtype=np.float32),
+        1.0,
+        99.0,
+    )
 
     for i, pid in enumerate(patient_ids):
         d = rows_by_patient[pid]
@@ -130,9 +78,9 @@ def _make_uncertainty_overlay_figure(
         u[~bm] = np.nan
 
         if scale == "shared":
-            vmin, vmax = _robust_vmin_vmax(f[bm].reshape(-1), 1, 99)
+            vmin, vmax = shared_flair_vmin, shared_flair_vmax
         else:
-            vmin, vmax = _robust_vmin_vmax(f[bm].reshape(-1), 1, 99)
+            vmin, vmax = robust_vmin_vmax(f[bm].reshape(-1), 1.0, 99.0)
 
         umin, umax = 0.0, float(umax_global)
 
@@ -219,16 +167,19 @@ def main() -> int:
     out_fig = (repo_root / args.out_fig_dir).resolve() if not args.out_fig_dir.is_absolute() else args.out_fig_dir.resolve()
     maps_root = (repo_root / args.maps_root).resolve() if not args.maps_root.is_absolute() else args.maps_root.resolve()
 
-    _ensure_parent(out_csv)
-    _ensure_parent(out_thresholds)
-    _ensure_dir(out_reports)
-    _ensure_dir(out_fig)
-    if args.save_maps:
-        _ensure_dir(maps_root)
-
     import sys
 
     sys.path.insert(0, str(repo_root / "src"))
+    from mslam.common.cli_utils import (
+        ensure_dir,
+        ensure_parent,
+        parse_patients_arg,
+        read_manifest,
+        safe_float,
+        save_json,
+        save_nifti_like,
+    )
+    from mslam.common.plotting import setup_matplotlib_env
     from mslam.io.nifti import allclose_affine, allclose_zooms, read_array, read_header
     from mslam.metrics.uncertainty_metrics import (
         UncertaintySummary,
@@ -242,13 +193,21 @@ def main() -> int:
 
     import pandas as pd
 
+    ensure_parent(out_csv)
+    ensure_parent(out_thresholds)
+    ensure_dir(out_reports)
+    ensure_dir(out_fig)
+    if args.save_maps:
+        ensure_dir(maps_root)
+    setup_matplotlib_env(repo_root)
+
     p2 = pd.read_csv(phase2_csv)
     p2 = p2.set_index("patient_id")
 
-    rows = _read_manifest(manifest_path)
+    rows = read_manifest(manifest_path)
     ok_rows = [r for r in rows if r.get("ok", "False") == "True"]
     if args.patients.strip():
-        wanted = _parse_patients_arg(args.patients)
+        wanted = parse_patients_arg(args.patients)
         ok_rows = [r for r in ok_rows if r.get("patient_id") in wanted]
     if not ok_rows:
         print("No patients selected.")
@@ -329,9 +288,9 @@ def main() -> int:
                 "warnings": "",
                 "qc_needs_review": "",
                 "qc_change_not_confident": "",
-                "phase2_delta_lesion_vol_mm3": _safe_float(deltaV),
-                "phase2_dice_chg_sym_cons": _safe_float(dice_sym),
-                "phase2_chg_sym_cons_abs_vol_err_mm3": _safe_float(abs_vol_err),
+                "phase2_delta_lesion_vol_mm3": safe_float(deltaV),
+                "phase2_dice_chg_sym_cons": safe_float(dice_sym),
+                "phase2_chg_sym_cons_abs_vol_err_mm3": safe_float(abs_vol_err),
             }
         )
 
@@ -351,9 +310,9 @@ def main() -> int:
             "inputs": {},
             "warnings": warnings,
             "context_phase2": {
-                "delta_lesion_vol_mm3": _safe_float(deltaV),
-                "dice_chg_sym_cons": _safe_float(dice_sym),
-                "abs_vol_err_chg_sym_cons_mm3": _safe_float(abs_vol_err),
+                "delta_lesion_vol_mm3": safe_float(deltaV),
+                "dice_chg_sym_cons": safe_float(dice_sym),
+                "abs_vol_err_chg_sym_cons_mm3": safe_float(abs_vol_err),
             },
             "uncertainty": {"maps": {"t0": {}, "t1": {}}, "summaries": {"t0": {}, "t1": {}}},
             "qc": {},
@@ -470,22 +429,22 @@ def main() -> int:
                 s_lesion: UncertaintySummary = summarize_in_mask(um, lesion_b & brain_b, p=95.0)
                 s_bnd: UncertaintySummary = summarize_in_mask(um, boundary, p=95.0)
 
-                patient_out[f"unc_{ut}_mean_brain_{tp}"] = _safe_float(s_brain.mean)
-                patient_out[f"unc_{ut}_p95_brain_{tp}"] = _safe_float(s_brain.p95)
-                patient_out[f"unc_{ut}_mean_lesion_{tp}"] = _safe_float(s_lesion.mean)
-                patient_out[f"unc_{ut}_mean_boundary_{tp}"] = _safe_float(s_bnd.mean)
+                patient_out[f"unc_{ut}_mean_brain_{tp}"] = safe_float(s_brain.mean)
+                patient_out[f"unc_{ut}_p95_brain_{tp}"] = safe_float(s_brain.p95)
+                patient_out[f"unc_{ut}_mean_lesion_{tp}"] = safe_float(s_lesion.mean)
+                patient_out[f"unc_{ut}_mean_boundary_{tp}"] = safe_float(s_bnd.mean)
 
                 rep["uncertainty"]["summaries"][tp][ut] = {
-                    "brain": {"mean": _safe_float(s_brain.mean), "p95": _safe_float(s_brain.p95), "n_voxels": int(s_brain.n_voxels)},
-                    "lesion": {"mean": _safe_float(s_lesion.mean), "p95": _safe_float(s_lesion.p95), "n_voxels": int(s_lesion.n_voxels)},
-                    "boundary": {"mean": _safe_float(s_bnd.mean), "p95": _safe_float(s_bnd.p95), "n_voxels": int(s_bnd.n_voxels)},
+                    "brain": {"mean": safe_float(s_brain.mean), "p95": safe_float(s_brain.p95), "n_voxels": int(s_brain.n_voxels)},
+                    "lesion": {"mean": safe_float(s_lesion.mean), "p95": safe_float(s_lesion.p95), "n_voxels": int(s_lesion.n_voxels)},
+                    "boundary": {"mean": safe_float(s_bnd.mean), "p95": safe_float(s_bnd.p95), "n_voxels": int(s_bnd.n_voxels)},
                 }
 
                 if args.save_maps:
                     out_map_dir = maps_root / pid / tp
-                    _ensure_dir(out_map_dir)
+                    ensure_dir(out_map_dir)
                     out_map_path = out_map_dir / f"unc_{ut}.nii.gz"
-                    _write_nifti_like(paths["prob"], out_map_path, um)
+                    save_nifti_like(paths["prob"], out_map_path, um)
                     rep["uncertainty"]["maps"][tp][ut] = str(out_map_path.relative_to(repo_root))
 
             # Cache arrays for example overlays (t1 only).
@@ -537,12 +496,12 @@ def main() -> int:
         "qc_quantile": float(args.qc_quantile),
         "change_quantile": float(args.change_quantile),
         "thresholds": {
-            "unc_mean_lesion_t1": {"column": primary_col_mean_les, "value": _safe_float(thr_mean_les)},
-            "unc_p95_brain_t1": {"column": primary_col_p95_brain, "value": _safe_float(thr_p95_brain)},
-            "abs_delta_lesion_vol_mm3": {"column": "phase2_delta_lesion_vol_mm3", "value": _safe_float(thr_abs_dv)},
+            "unc_mean_lesion_t1": {"column": primary_col_mean_les, "value": safe_float(thr_mean_les)},
+            "unc_p95_brain_t1": {"column": primary_col_p95_brain, "value": safe_float(thr_p95_brain)},
+            "abs_delta_lesion_vol_mm3": {"column": "phase2_delta_lesion_vol_mm3", "value": safe_float(thr_abs_dv)},
         },
     }
-    _save_json(out_thresholds, thresholds)
+    save_json(out_thresholds, thresholds)
 
     # Apply QC flags + write per-patient reports.
     for row in patient_rows:
@@ -575,7 +534,7 @@ def main() -> int:
             "triggers": triggers,
         }
         report_path = out_reports / f"{pid}.json"
-        _save_json(report_path, rep)
+        save_json(report_path, rep)
 
     # Write aggregate CSV
     with out_csv.open("w", newline="") as f:

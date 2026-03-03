@@ -1,17 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
-
-
-def _ensure_parent(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
 
 def _parse_int_pair(s: str) -> tuple[int, int]:
     parts = [p.strip() for p in s.split(",") if p.strip()]
@@ -122,12 +116,21 @@ def main() -> int:
     out_stab = (repo / args.out_fig_stability).resolve()
     out_k = (repo / args.out_k_metrics).resolve()
 
-    # Matplotlib cache local+writable (avoids slow font-cache rebuilds in some environments).
-    mpl_cache = repo / "results" / ".mplconfig"
-    mpl_cache.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("MPLCONFIGDIR", str(mpl_cache))
-    # Silence occasional loky warnings about physical-core detection on macOS.
-    os.environ["LOKY_MAX_CPU_COUNT"] = str(os.cpu_count() or 1)
+    import sys
+
+    sys.path.insert(0, str(repo / "src"))
+    from mslam.common.cli_utils import ensure_parent
+    from mslam.common.plotting import setup_matplotlib_env
+
+    setup_matplotlib_env(repo, loky_safe=True)
+    import warnings
+
+    warnings.filterwarnings(
+        "ignore",
+        message="Could not find the number of physical cores.*",
+        category=UserWarning,
+        module=r"joblib\.externals\.loky\.backend\.context",
+    )
 
     import numpy as np
     import pandas as pd
@@ -269,7 +272,7 @@ def main() -> int:
         k_best = int(best[1])
 
     if k_metrics_rows:
-        _ensure_parent(out_k)
+        ensure_parent(out_k)
         pd.DataFrame(k_metrics_rows).sort_values("k").to_csv(out_k, index=False)
 
     km_final = KMeans(n_clusters=int(k_best), n_init=int(args.n_init), random_state=int(args.seed))
@@ -324,7 +327,7 @@ def main() -> int:
         if c in df.columns:
             out[c] = df.set_index("patient_id").loc[out["patient_id"], c].astype(float).to_numpy()
 
-    _ensure_parent(out_assign)
+    ensure_parent(out_assign)
     out.to_csv(out_assign, index=False)
 
     # Cluster profiles (medians) for interpretability.
@@ -344,7 +347,7 @@ def main() -> int:
         )
         profiles = pd.merge(profiles, qc_rate, on="cluster_id", how="left")
 
-    _ensure_parent(out_profiles)
+    ensure_parent(out_profiles)
     profiles.to_csv(out_profiles, index=False)
 
     # Figures
@@ -455,7 +458,7 @@ def main() -> int:
         dx, dy = offsets[j % len(offsets)]
         ax.annotate(patient_ids[int(i)], (X_pca[int(i), 0], X_pca[int(i), 1] if X_pca.shape[1] > 1 else 0.0), fontsize=8, xytext=(dx, dy), textcoords="offset points")
 
-    _ensure_parent(out_latent)
+    ensure_parent(out_latent)
     fig.savefig(out_latent, dpi=int(args.dpi))
     plt.close(fig)
 
@@ -474,7 +477,7 @@ def main() -> int:
     ax.set_yticklabels(labels_s, fontsize=7)
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="P(same cluster)")
 
-    _ensure_parent(out_stab)
+    ensure_parent(out_stab)
     fig.savefig(out_stab, dpi=int(args.dpi))
     plt.close(fig)
 

@@ -1,25 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
-
-
-def _ensure_parent(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-
-def _parse_csv_list(s: str) -> list[str]:
-    return [x.strip() for x in s.split(",") if x.strip()]
-
-
-def _parse_int_list(s: str) -> list[int]:
-    return [int(x.strip()) for x in s.split(",") if x.strip()]
-
 
 def _to_bool(v) -> bool:
     if isinstance(v, bool):
@@ -111,6 +97,12 @@ def main() -> int:
     out_fig_dv = (repo / args.out_fig_deltav).resolve()
     out_fig_dc = (repo / args.out_fig_dice).resolve()
 
+    import sys
+
+    sys.path.insert(0, str(repo / "src"))
+    from mslam.common.cli_utils import ensure_parent, parse_csv_list, parse_int_list
+    from mslam.common.plotting import setup_matplotlib_env
+
     import numpy as np
     import pandas as pd
 
@@ -118,8 +110,8 @@ def main() -> int:
     df4 = pd.read_csv(p4)
 
     # Phase 3 filtering
-    shifts = set(_parse_csv_list(args.shifts))
-    levels = set(_parse_int_list(args.levels))
+    shifts = set(parse_csv_list(args.shifts))
+    levels = set(parse_int_list(args.levels))
     df3 = df3[df3["ok"].astype(str) == "True"].copy()
     df3 = df3[(df3["mode"].astype(str) == str(args.mode)) & (df3["shift"].isin(sorted(shifts)))].copy()
     df3["level"] = df3["level"].astype(int)
@@ -157,14 +149,11 @@ def main() -> int:
     merged = pd.merge(df4, sens, on="patient_id", how="inner")
     merged = merged.sort_values("patient_id").reset_index(drop=True)
 
-    _ensure_parent(out_csv)
+    ensure_parent(out_csv)
     merged.to_csv(out_csv, index=False)
 
     # Plot settings
-    # Make matplotlib cache local+writable (avoids slow font-cache rebuilds on some systems).
-    mpl_cache = repo / "results" / ".mplconfig"
-    mpl_cache.mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("MPLCONFIGDIR", str(mpl_cache))
+    setup_matplotlib_env(repo)
 
     import matplotlib
 
@@ -230,7 +219,7 @@ def main() -> int:
 
         axs[0].set_ylabel(y_label)
         fig.suptitle(title, fontsize=12)
-        _ensure_parent(out_path)
+        ensure_parent(out_path)
         fig.savefig(out_path, dpi=int(args.dpi))
         plt.close(fig)
 

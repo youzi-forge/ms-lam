@@ -9,31 +9,6 @@ from pathlib import Path
 
 import numpy as np
 
-
-def _read_manifest(path: Path) -> list[dict[str, str]]:
-    with path.open("r", newline="") as f:
-        return list(csv.DictReader(f))
-
-
-def _parse_csv_list(s: str) -> list[str]:
-    return [x.strip() for x in s.split(",") if x.strip()]
-
-
-def _parse_int_list(s: str) -> list[int]:
-    out: list[int] = []
-    for x in _parse_csv_list(s):
-        out.append(int(x))
-    return out
-
-
-def _ensure_parent(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-
-def _ensure_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-
-
 def _is_run_complete(run_dir: Path, probability_map: bool) -> bool:
     meta_path = run_dir / "lstai_run.json"
     if not meta_path.exists():
@@ -54,29 +29,6 @@ def _is_run_complete(run_dir: Path, probability_map: bool) -> bool:
             run_dir / "lesion_prob_model3.nii.gz",
         ]
     return all(p.exists() for p in required)
-
-
-def _save_json(path: Path, obj: object) -> None:
-    path.write_text(json.dumps(obj, indent=2))
-
-
-def _save_nifti_like(ref_path: Path, out_path: Path, data) -> None:
-    import nibabel as nib
-    import numpy as np
-
-    ref_img = nib.load(str(ref_path))
-    arr = np.asarray(data)
-    if arr.shape != tuple(ref_img.shape[:3]):
-        raise ValueError(f"Shape mismatch for write: ref={ref_img.shape} vs data={arr.shape}")
-    out_img = nib.Nifti1Image(arr.astype(np.float32, copy=False), ref_img.affine, ref_img.header)
-    out_img.header.set_data_dtype(np.float32)
-    # Preserve zooms if possible.
-    try:
-        out_img.header.set_zooms(ref_img.header.get_zooms()[:3])
-    except Exception:
-        pass
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    nib.save(out_img, str(out_path))
 
 
 def _bool(a) -> np.ndarray:
@@ -183,114 +135,6 @@ def _compute_metrics(
     }
     return out, warnings
 
-
-def _make_patient_change_figure(
-    *,
-    patient_id: str,
-    flair0,
-    flair1,
-    brain,
-    mask0,
-    mask1,
-    gt,
-    new_mask,
-    diff_norm,
-    out_path: Path,
-    title: str,
-    scale: str = "per-timepoint",
-) -> None:
-    import numpy as np
-
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    gray = plt.get_cmap("gray").copy()
-    gray.set_bad(color="black")
-
-    bm = (brain > 0)
-    m0 = _bool(mask0)
-    m1 = _bool(mask1)
-    gt = _bool(gt)
-    new_mask = _bool(new_mask)
-
-    union = gt | new_mask | m0 | m1
-    if bool(union.any()):
-        per_z = union.sum(axis=(0, 1))
-        z = int(np.argmax(per_z))
-    else:
-        per_z = bm.sum(axis=(0, 1))
-        z = int(np.argmax(per_z)) if per_z.size else int(flair0.shape[2] // 2)
-
-    f0 = np.array(flair0[:, :, z], dtype=np.float32, copy=False).copy()
-    f1 = np.array(flair1[:, :, z], dtype=np.float32, copy=False).copy()
-    b2 = bm[:, :, z]
-    f0[~b2] = np.nan
-    f1[~b2] = np.nan
-
-    def robust_vmin_vmax(vals: np.ndarray, p_lo: float = 1.0, p_hi: float = 99.0) -> tuple[float, float]:
-        vals = vals[np.isfinite(vals)]
-        if vals.size == 0:
-            return 0.0, 1.0
-        lo = float(np.percentile(vals, p_lo))
-        hi = float(np.percentile(vals, p_hi))
-        if not (math.isfinite(lo) and math.isfinite(hi)) or hi <= lo:
-            lo = float(np.min(vals))
-            hi = float(np.max(vals))
-            if hi <= lo:
-                hi = lo + 1.0
-        return lo, hi
-
-    v0 = f0[b2].reshape(-1)
-    v1 = f1[b2].reshape(-1)
-    if scale == "shared":
-        vmin, vmax = robust_vmin_vmax(np.concatenate([v0, v1]), 1, 99)
-        vmin0, vmax0 = vmin, vmax
-        vmin1, vmax1 = vmin, vmax
-    else:
-        vmin0, vmax0 = robust_vmin_vmax(v0, 1, 99)
-        vmin1, vmax1 = robust_vmin_vmax(v1, 1, 99)
-
-    d = np.array(diff_norm[:, :, z], dtype=np.float32, copy=False).copy()
-    d[~b2] = np.nan
-    dvals = d[b2].reshape(-1)
-    _, dvmax = robust_vmin_vmax(dvals, 1, 99.5)
-
-    fig = plt.figure(figsize=(12, 9), layout="constrained")
-    axes = fig.subplots(2, 2)
-    for ax in axes.reshape(-1):
-        ax.set_axis_off()
-
-    axes[0, 0].imshow(f0.T, cmap=gray, vmin=vmin0, vmax=vmax0, origin="lower", interpolation="nearest")
-    if bool(m0[:, :, z].any()):
-        axes[0, 0].contour(m0[:, :, z].T.astype(float), levels=[0.5], colors="red", linewidths=1)
-    axes[0, 0].set_title("t0 FLAIR + lesion(mask)", fontsize=12)
-
-    axes[0, 1].imshow(f1.T, cmap=gray, vmin=vmin1, vmax=vmax1, origin="lower", interpolation="nearest")
-    if bool(m1[:, :, z].any()):
-        axes[0, 1].contour(m1[:, :, z].T.astype(float), levels=[0.5], colors="red", linewidths=1)
-    axes[0, 1].set_title("t1 FLAIR + lesion(mask)", fontsize=12)
-
-    axes[1, 0].imshow(f1.T, cmap=gray, vmin=vmin1, vmax=vmax1, origin="lower", interpolation="nearest")
-    if bool(new_mask[:, :, z].any()):
-        axes[1, 0].contour(new_mask[:, :, z].T.astype(float), levels=[0.5], colors="yellow", linewidths=1)
-    if bool(gt[:, :, z].any()):
-        axes[1, 0].contour(gt[:, :, z].T.astype(float), levels=[0.5], colors="cyan", linewidths=1)
-    axes[1, 0].set_title("t1 + new_proxy(yellow) + GT_change(cyan)", fontsize=12)
-
-    im = axes[1, 1].imshow(d.T, cmap="magma", vmin=0.0, vmax=dvmax, origin="lower", interpolation="nearest")
-    if bool(gt[:, :, z].any()):
-        axes[1, 1].contour(gt[:, :, z].T.astype(float), levels=[0.5], colors="cyan", linewidths=1)
-    axes[1, 1].set_title("|norm(t1)-norm(t0)| + GT_change(cyan)", fontsize=12)
-    fig.colorbar(im, ax=axes[1, 1], fraction=0.045, pad=0.02)
-
-    fig.suptitle(f"{patient_id} (z={z})  {title}", fontsize=13)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=200)
-    plt.close(fig)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Phase 3: robustness shift suite (shift_v1) + LST-AI + longitudinal metrics")
     parser.add_argument(
@@ -373,22 +217,34 @@ def main() -> int:
     out_summary_csv = (repo_root / args.out_summary_csv).resolve() if not args.out_summary_csv.is_absolute() else args.out_summary_csv.resolve()
     runlog_path = (repo_root / args.runlog).resolve() if not args.runlog.is_absolute() else args.runlog.resolve()
     out_fig = (repo_root / args.out_fig_dir).resolve() if not args.out_fig_dir.is_absolute() else args.out_fig_dir.resolve()
-    _ensure_parent(out_csv)
-    _ensure_parent(out_summary_csv)
-    _ensure_parent(runlog_path)
-    _ensure_dir(out_fig)
 
     import sys
 
     sys.path.insert(0, str(repo_root / "src"))
+    from mslam.common.cli_utils import (
+        ensure_dir,
+        ensure_parent,
+        parse_csv_list,
+        parse_int_list,
+        read_manifest,
+        save_json,
+        save_nifti_like,
+    )
+    from mslam.common.plotting import setup_matplotlib_env
     from mslam.engines.lstai import LstAiDockerConfig, run_lstai_docker
     from mslam.io.nifti import read_array, read_header
     from mslam.preprocessing.shift_suite import SHIFT_V1, apply_shift, stable_seed
+    from mslam.reporting.longitudinal_figures import save_patient_change_figure
 
-    rows = _read_manifest(manifest_path)
+    ensure_parent(out_csv)
+    ensure_parent(out_summary_csv)
+    ensure_parent(runlog_path)
+    ensure_dir(out_fig)
+
+    rows = read_manifest(manifest_path)
     ok_rows = [r for r in rows if r.get("ok", "False") == "True"]
     if args.patients.strip():
-        wanted = set(_parse_csv_list(args.patients))
+        wanted = set(parse_csv_list(args.patients))
         ok_rows = [r for r in ok_rows if r.get("patient_id") in wanted]
     if args.limit and args.limit > 0:
         ok_rows = ok_rows[: int(args.limit)]
@@ -396,11 +252,11 @@ def main() -> int:
         print("No patients selected.")
         return 1
 
-    shifts = _parse_csv_list(args.shifts)
+    shifts = parse_csv_list(args.shifts)
     for s in shifts:
         if s not in SHIFT_V1:
             raise SystemExit(f"Unknown shift '{s}'. Available: {', '.join(sorted(SHIFT_V1))}")
-    levels = _parse_int_list(args.levels)
+    levels = parse_int_list(args.levels)
 
     cfg = LstAiDockerConfig(
         image=args.image,
@@ -501,7 +357,7 @@ def main() -> int:
         "shift_meta_json",
     ]
 
-    _ensure_parent(out_csv)
+    ensure_parent(out_csv)
     completed: set[tuple[str, str, str, int]] = set()
     if out_csv.exists() and not args.overwrite_results:
         try:
@@ -716,9 +572,9 @@ def main() -> int:
                         clip_p_lo=1.0,
                         clip_p_hi=99.0,
                     )
-                    _save_nifti_like(src_t1, out_t1, t1_shifted)
-                    _save_nifti_like(src_flair, out_flair, fl_shifted)
-                    _save_json(meta_path, {"t1w": meta_t1, "flair": meta_fl})
+                    save_nifti_like(src_t1, out_t1, t1_shifted)
+                    save_nifti_like(src_flair, out_flair, fl_shifted)
+                    save_json(meta_path, {"t1w": meta_t1, "flair": meta_fl})
                     return out_t1, out_flair, str(meta_path)
 
                 # Pick which images/masks to use for evaluation.
@@ -887,6 +743,7 @@ def main() -> int:
     )
     summary.to_csv(out_summary_csv, index=False)
 
+    setup_matplotlib_env(repo_root)
     import matplotlib
 
     matplotlib.use("Agg")
@@ -1003,8 +860,6 @@ def main() -> int:
         shift_name = str(worst_row["shift"])
 
         # Collect per-level panels for this patient and shift.
-        import numpy as np
-
         from mslam.metrics.longitudinal_metrics import (
             dilate_binary_mm,
             intensity_change_stats,
@@ -1065,7 +920,7 @@ def main() -> int:
             diff_n = np.abs(n1 - n0)
             return f0, f1, m0b, m1b, new_cons, diff_n
 
-        levels_sorted = sorted(set(int(l) for l in levels_present))
+        levels_sorted = sorted({int(level_value) for level_value in levels_present})
         # Ensure level0 included for comparison.
         if 0 not in levels_sorted:
             levels_sorted = [0] + levels_sorted
@@ -1078,7 +933,7 @@ def main() -> int:
             tmp = out_fig / f"_tmp_phase3_{pid}_{shift_name}_level{lv}.png"
             f0, f1, m0b, m1b, new_cons, diff_n = load_case(lv)
             title = f"{shift_name} level{lv}"
-            _make_patient_change_figure(
+            save_patient_change_figure(
                 patient_id=pid,
                 flair0=f0,
                 flair1=f1,
@@ -1089,7 +944,7 @@ def main() -> int:
                 new_mask=new_cons,
                 diff_norm=diff_n,
                 out_path=tmp,
-                title=title,
+                title_suffix=f"  {title}",
                 scale=args.scale,
             )
             img = plt.imread(tmp)
