@@ -2,8 +2,7 @@ repos:
   - repo: local
     hooks:
       - id: ruff-pyflakes
-        name: ruff (pyflakes)
-        entry: ruff check --select F
+        name: ruff (minimal)
+        entry: ruff check --select F,E741
         language: system
         types: [python]
-
