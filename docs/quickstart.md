@@ -11,7 +11,7 @@ git clone --depth 1 https://github.com/muschellij2/open_ms_data.git data/raw/ope
 
 Path used: `data/raw/open_ms_data/longitudinal/coregistered/`.
 
-## 2) Build a manifest + run sanity checks
+## 2) Build a manifest + run data sanity checks (Phase 0)
 
 ```bash
 python3 scripts/01_make_manifest.py \
@@ -65,7 +65,7 @@ Notes:
 * In the `jqmcginnis/lst-ai:v1.2.0` Docker image, LST-AI `--output` behaves as a **directory** (despite some help text suggesting a file path).
 * With `--probability_map`, LST-AI writes probmaps under `--temp`; this repo copies them into canonical filenames.
 
-## 4) Generate monitoring metrics + validate against change-GT
+## 4) Generate monitoring metrics + validate against change-GT (Phase 2)
 
 ```bash
 python3 scripts/07_eval_longitudinal.py
@@ -81,7 +81,7 @@ Key outputs:
 
 All volumes are in mm³ (spacing-aware). Two change proxies are computed: a conservative new-lesion proxy (baseline mask dilated by 2 mm before diffing, then small-component filtering) and a symmetric change proxy (XOR of both masks, similarly cleaned), which tends to align better with change-region GT semantics. Segmentation-independent intensity-change evidence (brainmask-normalized) is reported alongside.
 
-## 5) Robustness sensitivity under simulated shift (shift_v1)
+## 5) Run robustness stress tests under simulated shift (Phase 3, shift_v1)
 
 Smoke test:
 
@@ -111,7 +111,7 @@ Outputs:
 Notes:
 - For interpretation (median/IQR vs mean±std; and why the sensitive-case figure shows exactly one patient), see `docs/phase_notes/phase3.md`.
 
-## 6) Uncertainty maps (voxel → patient) + QC flags
+## 6) Compute uncertainty summaries and QC flags (Phase 4)
 
 Compute voxel-level uncertainty proxies from saved probability maps, aggregate to patient-level summaries, derive
 cohort-quantile thresholds, and write QC flags + reports:
@@ -136,7 +136,7 @@ Outputs:
 - `results/figures/phase4_unc_vs_shift_sens_deltaV.png` *(requires Phase 3 outputs)*
 - `results/figures/phase4_unc_vs_shift_sens_dice.png` *(requires Phase 3 outputs)*
 
-## 7) Exploratory phenotyping (features → latent space)
+## 7) Exploratory phenotyping (optional Phase 5)
 
 Export a patient-level feature table (Phase 2 + Phase 4; optionally includes Phase 3 sensitivity if available):
 
@@ -159,4 +159,4 @@ Outputs:
 - `results/figures/phase5_coassignment_heatmap.png`
 
 Notes:
-- Phase 5 is exploratory; for interpretation and recommended visualizations, see `phase_notes/phase5.md`.
+- Phase 5 is an optional exploratory extension; for interpretation and recommended visualizations, see `phase_notes/phase5.md`.

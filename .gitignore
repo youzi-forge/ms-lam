@@ -15,6 +15,7 @@ data/processed/
 # Results: keep small evidence artifacts, ignore heavy runs/caches
 results/runs/
 results/cache/
+results/.mplconfig/
 
 # Scratch outputs
 results/figures/_tmp*/

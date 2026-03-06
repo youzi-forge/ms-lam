@@ -10,9 +10,122 @@ The current baseline runs on the public `open_ms_data` longitudinal MS dataset (
 
 ---
 
+## What this repo is for (and what it is not)
+
+This repo is for building a **reproducible, auditable longitudinal monitoring baseline** — stress-testing it under distributional shift, quantifying uncertainty, and producing patient-level evidence of where it works and where it breaks. It is not a new segmentation architecture, and it is not a clinically approved system.
+
+---
+
+## Project structure
+
+The numbered scripts preserve execution order, while the main reusable code lives in `src/mslam/metrics`, `src/mslam/preprocessing`, `src/mslam/common`, and `src/mslam/reporting`.
+
+### Repo layout
+
+```text
+ms-lam/
+  data/
+    raw/                       # local-only (not versioned)
+      open_ms_data/            # upstream clone (recommended)
+    processed/                 # local-only (not versioned)
+      lstai_outputs/           # LST-AI outputs: patientXX/{t0,t1}/...
+      lstai_outputs_shift_v1/  # LST-AI outputs under Phase 3 robustness shifts
+      shift_v1/                # cached shifted inputs for robustness suite
+      phase4_uncertainty_maps/ # optional voxel-level uncertainty maps
+  results/
+    tables/                    # cohort summaries, manifests, thresholds
+    figures/                   # patient-level evidence figures
+    reports/                   # per-patient JSON reports
+  src/mslam/
+    io/                        # lightweight NIfTI readers and grid checks
+    metrics/                   # longitudinal metrics, volume, Dice, uncertainty summaries
+    preprocessing/             # data sanity checks and robustness shift suite
+    engines/                   # segmentation engine adapters (pluggable)
+    common/                    # shared CLI/path/plot helpers for research scripts
+    reporting/                 # patient-level change figures and related helpers
+  scripts/                     # execution-ordered stages (e.g. 02=sanity, 07=monitoring, 08=robustness, 10=uncertainty QC)
+  tests/                       # focused unit tests for core modules
+  docs/phase_notes/            # method notes + run-dependent interpretation
+```
+
+### Pipeline overview (data → metrics → QC → robustness → features)
+
+This diagram is a **high-level dependency view** (keeps the main dataflow readable; optional visualization-only steps are omitted).
+
+```mermaid
+flowchart LR
+  A[open_ms_data<br/>longitudinal/coregistered] --> B[Manifest and data sanity checks<br/>Phase 0<br/>scripts/01 + scripts/02]
+  B --> C[LST-AI inference<br/>T1 and FLAIR<br/>scripts/04]
+  B --> D[Monitoring metrics and change-GT validation<br/>Phase 2<br/>scripts/07]
+  C --> D
+
+  B --> E[Robustness shift suite shift_v1<br/>Phase 3<br/>default: shift t1 only]
+  E --> F[LST-AI on shifted inputs<br/>scripts/08]
+  C --> G[Robustness sensitivity<br/>scripts/08]
+  F --> G
+
+  B --> H[Uncertainty summaries and QC flags<br/>Phase 4<br/>scripts/10]
+  C --> H
+  D --> H
+  H --> I[Phase 4 outputs<br/>tables + per-patient QC reports + figures]
+
+  I --> J[Uncertainty vs shift sensitivity<br/>optional: scripts/11]
+  G --> J
+
+  D --> K[Feature table<br/>scripts/12]
+  I --> K
+  J --> K
+  K --> L[Exploratory phenotyping (optional)<br/>Phase 5<br/>PCA, k-means, stability<br/>scripts/13]
+```
+
+---
+
+## Quickstart
+
+**Smoke test (no data, no Docker):**
+
+```bash
+python3 scripts/00_toy_smoke_test.py --overwrite
+```
+
+This generates a tiny synthetic cohort and runs the core pipeline end-to-end: monitoring metrics and change-GT validation (Phase 2) → uncertainty QC (Phase 4) → exploratory phenotyping (optional Phase 5). Outputs go to `results/_toy/`. It is for pipeline validation only.
+
+**Full pipeline on `open_ms_data`:** see [`docs/quickstart.md`](docs/quickstart.md) for the step-by-step walkthrough (data download → Phase 0 sanity → LST-AI inference → Phase 2 monitoring → Phase 3 robustness → Phase 4 uncertainty QC → optional Phase 5 phenotyping).
+
+---
+
+## Installation
+
+Prereqs:
+- Python 3
+- Docker Desktop (for LST-AI inference)
+
+Install Python deps:
+```bash
+pip3 install -r requirements.txt
+```
+
+Optional (dev): install pre-commit hooks:
+
+```bash
+pip3 install -r requirements-dev.txt
+pre-commit install
+```
+
+Pull LST-AI image:
+
+```bash
+docker pull jqmcginnis/lst-ai:v1.2.0
+```
+
+Apple Silicon note: runners use `--platform linux/amd64` for compatibility.
+This can be slower and may require increased Docker memory. For faster runs, consider Linux/Colab for inference and copy outputs back.
+
+---
+
 ## Observations (on open\_ms\_data + LST-AI)
 
-Empirical observations from this specific cohort and engine — not general claims about LST-AI or MS monitoring. Per-phase details in [`docs/phase_notes/`](docs/phase_notes/).
+Empirical observations from this specific cohort and engine — not general claims about LST-AI or MS monitoring. Per-phase details live in [`docs/phase_notes/`](docs/phase_notes/).
 
 **Pretrained segmentation ≠ change detection.**
 Median Dice between segmentation-derived change proxies and the change-region GT is ~0.15 (best case 0.53). Volume change tracks GT magnitude reasonably (Spearman ~0.79), but voxel-level overlap is poor — and the conservative proxy systematically overestimates GT in 18/20 patients.
@@ -25,15 +138,9 @@ Cohort-quantile QC flags 4/20 patients, correctly identifying the worst segmenta
 
 ---
 
-## What this repo is for (and what it is not)
-
-This repo is for building a **reproducible, auditable longitudinal monitoring baseline** — stress-testing it under distributional shift, quantifying uncertainty, and producing patient-level evidence of where it works and where it breaks. It is not a new segmentation architecture, and it is not a clinically approved system.
-
----
-
 ## Key outputs
 
-**Monitoring + GT validation + intensity-change evidence (Phase 2)**
+**Monitoring metrics + change-GT validation (Phase 2)**
 ![Example montage](results/figures/phase2_examples.png)
 
 Each patient panel shows: t0/t1 FLAIR with lesion mask overlay, conservative new-lesion proxy (yellow) vs change-region GT (cyan), and brainmask-normalized intensity difference with GT overlay. Patient04 (bottom) illustrates a hard failure: the GT change region exists but the segmentation misses it entirely — while the intensity-difference map still shows signal there.
@@ -79,64 +186,11 @@ Left: red contour = lesion mask, heatmap = ensemble variance. Patient04 (high le
 | Monitoring metrics + change-GT validation | ✅ | per-patient reports + cohort tables |
 | Robustness sensitivity (shift_v1) | ✅ | `t1_only` / representative subset |
 | Uncertainty maps + QC flags | ✅ | uncertainty summaries + cohort-quantile QC reports |
-| Phenotyping / latent codes | ✅ | feature table → PCA/k-means + stability |
+| Phenotyping / latent codes | ✅ | optional exploratory extension; feature table → PCA/k-means + stability |
 | External benchmarks (ISBI 2015, SHIFTS 2022) | 🔜 | dataset adapters + rerun harness |
 | Normative “digital twin”-style monitoring | 💤 | registration-based subtraction (later) |
 
 ---
-
-## Project structure
-
-### Repo layout
-
-```text
-ms-lam/
-  data/
-    raw/                       # local-only (not versioned)
-      open_ms_data/            # upstream clone (recommended)
-    processed/                 # local-only (not versioned)
-      lstai_outputs/           # LST-AI outputs: patientXX/{t0,t1}/...
-      lstai_outputs_shift_v1/  # LST-AI outputs under shift_v1 (optional)
-      shift_v1/                # shifted inputs for robustness suite (optional)
-      phase4_uncertainty_maps/ # voxel-level uncertainty maps (optional; can be large)
-  results/
-    tables/                    # small CSV/JSON outputs (often commit-friendly)
-    figures/                   # key evidence figures (often commit-friendly)
-    reports/                   # per-patient JSON reports
-  src/mslam/                   # library code (IO, engines, metrics, preprocessing, viz)
-  scripts/                     # runnable entrypoints (01..13)
-  docs/phase_notes/            # method notes + run-dependent interpretation
-```
-
-### Pipeline overview (data → metrics → QC → robustness → features)
-
-This diagram is a **high-level dependency view** (keeps the main dataflow readable; optional visualization-only steps are omitted).
-
-```mermaid
-flowchart LR
-  A[open_ms_data<br/>longitudinal/coregistered] --> B[Manifest and sanity checks<br/>scripts/01 + scripts/02]
-  B --> C[LST-AI inference<br/>T1 and FLAIR<br/>scripts/04]
-  B --> D[Monitoring metrics and change-GT validation<br/>scripts/07]
-  C --> D
-
-  B --> E[Shift suite shift_v1<br/>default: shift t1 only]
-  E --> F[LST-AI on shifted inputs<br/>scripts/08]
-  C --> G[Robustness sensitivity<br/>scripts/08]
-  F --> G
-
-  B --> H[Uncertainty and QC flags<br/>scripts/10]
-  C --> H
-  D --> H
-  H --> I[Phase 4 outputs<br/>tables + per-patient QC reports + figures]
-
-  I --> J[Uncertainty vs shift sensitivity<br/>optional: scripts/11]
-  G --> J
-
-  D --> K[Feature table<br/>scripts/12]
-  I --> K
-  J --> K
-  K --> L[Exploratory phenotyping<br/>PCA, k-means, stability<br/>scripts/13]
-```
 
 ## Data & pretrained baseline
 
@@ -168,49 +222,6 @@ Primary citation:
 
 Upstream repository:  
 https://github.com/CompImg/LST-AI
-
----
-
-## Installation
-
-Prereqs:
-- Python 3
-- Docker Desktop (for LST-AI inference)
-
-Install Python deps:
-```bash
-pip3 install -r requirements.txt
-```
-
-Optional (dev): install pre-commit hooks (runs a minimal `ruff` lint on `git commit`):
-
-```bash
-pip3 install -r requirements-dev.txt
-pre-commit install
-```
-
-Pull LST-AI image:
-
-```bash
-docker pull jqmcginnis/lst-ai:v1.2.0
-```
-
-Apple Silicon note: runners use `--platform linux/amd64` for compatibility.
-This can be slower and may require increased Docker memory. For faster runs, consider Linux/Colab for inference and copy outputs back.
-
----
-
-## Quickstart
-
-**Smoke test (no data, no Docker):**
-
-```bash
-python3 scripts/00_toy_smoke_test.py --overwrite
-```
-
-This generates a tiny synthetic cohort and runs the core pipeline (monitoring → uncertainty/QC → phenotyping) end-to-end. Outputs go to `results/_toy/`. It is for pipeline validation only (no clinical meaning).
-
-**Full pipeline on `open_ms_data`:** see [`docs/quickstart.md`](docs/quickstart.md) for the step-by-step walkthrough (data download → LST-AI inference → monitoring metrics → robustness → uncertainty QC → phenotyping).
 
 ---
 
