@@ -1,10 +1,8 @@
 # MS-LAM — Longitudinal Brain MRI Monitoring Benchmark
 
-**MS-LAM** asks a practical question: if you take a pretrained lesion segmentation model and run it on paired baseline / follow-up brain MRIs, how reliable are the resulting “change” signals — and what breaks them?
+**MS-LAM** is a benchmark pipeline for evaluating how well pretrained lesion segmentation models track longitudinal changes in brain MRI. Given paired baseline/follow-up scans, it computes monitoring signals (volume change, change proxies, intensity evidence), then tests their reliability under simulated distributional shift, with uncertainty quantification and validation against change-region ground truth.
 
-It is a reproducible pipeline that turns paired scans into longitudinal monitoring signals (volume change, conservative change proxies, segmentation-independent intensity evidence), then stress-tests those signals with robustness perturbations, uncertainty quantification, and validation against change-region ground truth.
-
-The current baseline runs on the public `open_ms_data` longitudinal MS dataset (20 patients, 2 timepoints) using **LST-AI** as a fixed pretrained segmentation engine. Segmentation is a plug-in: the harness is designed so that engines can be swapped without changing the downstream evaluation.
+Currently runs on `open_ms_data` (20 MS patients, 2 timepoints) with **LST-AI** as the segmentation backend. The segmentation engine is pluggable — swapping it doesn't require changes to downstream evaluation.
 
 > **Status:** core pipeline implemented and run end-to-end on `open_ms_data` + LST-AI. External benchmarks planned.
 
