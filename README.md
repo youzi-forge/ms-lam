@@ -43,7 +43,7 @@ ms-lam/
     engines/                   # segmentation engine adapters (pluggable)
     common/                    # shared CLI/path/plot helpers for research scripts
     reporting/                 # patient-level change figures and related helpers
-  scripts/                     # execution-ordered stages (e.g. 02=sanity, 07=monitoring, 08=robustness, 10=uncertainty QC)
+  scripts/                     # pipeline stages, numbered by execution order
   tests/                       # focused unit tests for core modules
   docs/phase_notes/            # method notes + run-dependent interpretation
 ```
@@ -75,7 +75,7 @@ flowchart LR
   D --> K[Feature table<br/>scripts/12]
   I --> K
   J --> K
-  K --> L[Exploratory phenotyping (optional)<br/>Phase 5<br/>PCA, k-means, stability<br/>scripts/13]
+  K --> L["Exploratory phenotyping (optional)<br/>Phase 5<br/>PCA, k-means, stability<br/>scripts/13"]
 ```
 
 ---
@@ -91,6 +91,12 @@ python3 scripts/00_toy_smoke_test.py --overwrite
 This generates a tiny synthetic cohort and runs the core pipeline end-to-end: monitoring metrics and change-GT validation (Phase 2) → uncertainty QC (Phase 4) → exploratory phenotyping (optional Phase 5). Outputs go to `results/_toy/`. It is for pipeline validation only.
 
 **Full pipeline on `open_ms_data`:** see [`docs/quickstart.md`](docs/quickstart.md) for the step-by-step walkthrough (data download → Phase 0 sanity → LST-AI inference → Phase 2 monitoring → Phase 3 robustness → Phase 4 uncertainty QC → optional Phase 5 phenotyping).
+
+**Unit tests:**
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -p 'test_*.py'
+```
 
 ---
 
